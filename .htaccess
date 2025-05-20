@@ -1,0 +1,97 @@
+# Enable URL rewriting
+RewriteEngine On
+# Set base directory
+RewriteBase /livesupport/
+
+# Redirect to HTTPS (uncomment on production)
+# RewriteCond %{HTTPS} off
+# RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Enable CORS for widget resources
+<IfModule mod_headers.c>
+    <FilesMatch "\.(js|css)$">
+        Header set Access-Control-Allow-Origin "*"
+        Header set Access-Control-Allow-Methods "GET, OPTIONS"
+        Header set Access-Control-Allow-Headers "Content-Type"
+    </FilesMatch>
+    
+    # Existing security headers
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# Handle OPTIONS requests for CORS preflight
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule ^(.*)$ $1 [R=200,L]
+
+# Allow access to api.php for external requests
+<FilesMatch "^(api\.php)$">
+    Order allow,deny
+    Allow from all
+    
+    # Add CORS headers specifically for API files
+    <IfModule mod_headers.c>
+        Header set Access-Control-Allow-Origin "*"
+        Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+        Header set Access-Control-Allow-Headers "Content-Type"
+    </IfModule>
+</FilesMatch>
+
+# Prevent directory listing
+Options -Indexes
+
+# Handle 404 errors
+ErrorDocument 404 /livesupport/404.php
+
+# Protect sensitive files
+<FilesMatch "^\.">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Protect configuration files
+<FilesMatch "^(config\.php|db\.php|\.env)">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Handle widget API calls
+RewriteRule ^api/widget/(.*)$ widget/api.php?action=$1 [QSA,L]
+
+# Handle widget embed script with a shorter URL
+RewriteRule ^widget.js$ widget/embed.js [L]
+
+# Enable PHP error reporting (remove in production)
+php_flag display_errors on
+php_value error_reporting E_ALL
+
+# Set default character encoding
+AddDefaultCharset UTF-8
+
+# Enable browser caching for static assets
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/jpg "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/svg+xml "access plus 1 month"
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType text/javascript "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+</IfModule>
+
+# Compress text files
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json
+</IfModule>
+
+# Prevent access to the .git directory
+RedirectMatch 404 /\.git
+
+# Clean URLs (uncomment if needed)
+# RewriteCond %{REQUEST_FILENAME} !-f
+# RewriteCond %{REQUEST_FILENAME} !-d
+# RewriteRule ^([^/]+)/?$ $1.php [L]

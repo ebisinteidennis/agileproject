@@ -1,0 +1,43 @@
+[2025-05-19 21:07:53] API Request: Array
+(
+    [method] => GET
+    [uri] => /widget/api.php?action=get_messages&widget_id=450a6c5bead35a8c3648a923a33da5a5&visitor_id=visitor_e3zrb3zktvov6g7d8z8pwf&since=0
+    [get] => Array
+        (
+            [action] => get_messages
+            [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+            [visitor_id] => visitor_e3zrb3zktvov6g7d8z8pwf
+            [since] => 0
+        )
+
+    [post] => Array
+        (
+        )
+
+    [headers] => Array
+        (
+            [Host] => agileproject.site
+            [cf-ray] => 9426913c69e4e203-ORD
+            [X-Forwarded-For] => 18.191.118.3
+            [User-Agent] => Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36
+            [Referer] => https://www.turkishcustomsservice.com/
+            [Accept-Encoding] => gzip, br
+            [cdn-loop] => cloudflare; loops=1
+            [x-forwarded-proto] => https
+            [sec-fetch-dest] => empty
+            [sec-fetch-mode] => cors
+            [cf-visitor] => {"scheme":"https"}
+            [sec-fetch-site] => cross-site
+            [origin] => https://www.turkishcustomsservice.com
+            [cf-connecting-ip] => 18.191.118.3
+            [cf-ipcountry] => US
+            [Accept] => */*
+            [sec-ch-ua-platform] => "Linux"
+            [sec-ch-ua] => "HeadlessChrome";v="117", "Not;A=Brand";v="8", "Chromium";v="117"
+            [sec-ch-ua-mobile] => ?0
+        )
+
+    [body] => 
+)
+
+[2025-05-19 21:07:53] Getting messages for widget_id: 450a6c5bead35a8c3648a923a33da5a5, visitor_id: visitor_e3zrb3zktvov6g7d8z8pwf
