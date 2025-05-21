@@ -15,6 +15,22 @@ require_once '../includes/config.php';
 require_once '../includes/db.php';
 require_once '../includes/functions.php';
 
+// Allow requests from any origin
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Accept, X-Requested-With');
+
+// Handle preflight request
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    exit(0);
+}
+
+// Only set Content-Type header for non-form submissions
+// This allows iframe-based form submissions to work properly
+if (strpos($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json') !== false) {
+    header('Content-Type: application/json');
+}
+
 // Log file for debugging
 $logFile = __DIR__ . '/../logs/widget_api_' . date('Y-m-d') . '.log';
 
@@ -36,16 +52,13 @@ function logMessage($message, $data = null) {
     file_put_contents($logFile, $logEntry . PHP_EOL, FILE_APPEND);
 }
 
-// Set headers for JSON response and CORS
-header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Accept, X-Requested-With');
-
-// Handle preflight request
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    exit(0);
-}
+// Log request details for debugging
+logMessage('REQUEST_METHOD: ' . $_SERVER['REQUEST_METHOD']);
+logMessage('REQUEST_URI: ' . $_SERVER['REQUEST_URI']);
+logMessage('REMOTE_ADDR: ' . $_SERVER['REMOTE_ADDR']);
+logMessage('HTTP_ORIGIN: ' . ($_SERVER['HTTP_ORIGIN'] ?? 'not set'));
+logMessage('HTTP_REFERER: ' . ($_SERVER['HTTP_REFERER'] ?? 'not set'));
+logMessage('CONTENT_TYPE: ' . ($_SERVER['CONTENT_TYPE'] ?? 'not set'));
 
 // Log the request for debugging
 logMessage('API Request', [
@@ -259,6 +272,12 @@ function getWidgetConfig() {
         
         logMessage('Found user for widget_id', ['user_id' => $user['id'], 'name' => $user['name'] ?? 'Unknown']);
         
+        // Get site URL from settings
+        $siteSettings = $db->fetch("SELECT * FROM settings WHERE id = 1");
+        $siteUrl = $siteSettings && isset($siteSettings['site_name']) ? 
+            'https://' . strtolower(str_replace(' ', '', $siteSettings['site_name'])) . '.site' : 
+            'https://agileproject.site';
+        
         // Check if user has an active subscription
         $isSubscriptionActive = isSubscriptionActive($user);
         
@@ -274,7 +293,8 @@ function getWidgetConfig() {
             'greetingMessage' => 'Hi there! How can we help you today?',
             'offlineMessage' => 'We\'re currently offline. Leave a message and we\'ll get back to you soon.',
             'showBranding' => !$isSubscriptionActive,
-            'userOnline' => $isUserOnline
+            'userOnline' => $isUserOnline,
+            'siteUrl' => $siteUrl // Add site URL to config
         ];
         
         // If user has a custom configuration, use it
@@ -285,15 +305,36 @@ function getWidgetConfig() {
             );
             
             if ($settings) {
+                // Get position from enum value (bottom_right, bottom_left, etc.)
+                $position = 'bottom-right'; // Default
+                if (isset($settings['position'])) {
+                    // Convert position from database format to widget format
+                    switch ($settings['position']) {
+                        case 'bottom_right':
+                            $position = 'bottom-right';
+                            break;
+                        case 'bottom_left':
+                            $position = 'bottom-left';
+                            break;
+                        case 'top_right':
+                            $position = 'top-right';
+                            break;
+                        case 'top_left':
+                            $position = 'top-left';
+                            break;
+                    }
+                }
+                
                 $config = [
-                    'theme' => $settings['theme'] ?? 'light',
-                    'position' => $settings['position'] ?? 'bottom-right',
-                    'primaryColor' => $settings['primary_color'] ?? '#4a6cf7',
-                    'autoOpen' => (bool)($settings['auto_open'] ?? false),
-                    'greetingMessage' => $settings['greeting_message'] ?? 'Hi there! How can we help you today?',
+                    'theme' => 'light', // Default theme
+                    'position' => $position,
+                    'primaryColor' => $settings['theme_color'] ?? '#4a6cf7',
+                    'autoOpen' => (bool)($settings['auto_popup'] ?? false),
+                    'greetingMessage' => $settings['welcome_message'] ?? 'Hi there! How can we help you today?',
                     'offlineMessage' => $settings['offline_message'] ?? 'We\'re currently offline. Leave a message and we\'ll get back to you soon.',
-                    'showBranding' => false,
-                    'userOnline' => $isUserOnline
+                    'showBranding' => (bool)($settings['show_branding'] ?? false),
+                    'userOnline' => $isUserOnline,
+                    'siteUrl' => $siteUrl // Always include site URL
                 ];
             }
         }
@@ -314,60 +355,64 @@ function getWidgetConfig() {
 
 /**
  * Send a message from visitor to agent
+ * Simplified to handle form submissions reliably
  */
 function sendMessage() {
     global $db;
     
-    // Get request body
-    $requestBody = file_get_contents('php://input');
-    logMessage('Raw request body', $requestBody);
+    // Log all input for debugging
+    logMessage('Input sources', [
+        'method' => $_SERVER['REQUEST_METHOD'],
+        'content_type' => $_SERVER['CONTENT_TYPE'] ?? 'none',
+        'get' => $_GET,
+        'post' => $_POST,
+        'raw' => file_get_contents('php://input')
+    ]);
     
-    // Try to decode JSON
-    $data = json_decode($requestBody, true);
+    // Get data from POST parameters (form submission)
+    // This is the most reliable method across browsers
+    $data = $_POST;
     
-    // Check for JSON decoding errors
-    if (json_last_error() !== JSON_ERROR_NONE) {
-        logMessage('JSON decode error', json_last_error_msg());
-        
-        // Try to get data from POST
-        if (!empty($_POST)) {
-            $data = $_POST;
-            logMessage('Using POST data instead', $data);
-        } else {
-            sendErrorResponse('Invalid request data: ' . json_last_error_msg());
-            return;
+    // If POST is empty, try to parse JSON body
+    if (empty($data)) {
+        $rawInput = file_get_contents('php://input');
+        if (!empty($rawInput)) {
+            $jsonData = json_decode($rawInput, true);
+            if ($jsonData) {
+                $data = $jsonData;
+                logMessage('Using JSON data', $data);
+            }
         }
     }
     
-    // Log the parsed data
-    logMessage('Parsed request data', $data);
+    // If still empty, try GET parameters (for image beacons)
+    if (empty($data)) {
+        $data = $_GET;
+        logMessage('Using GET data', $data);
+    }
     
     // Validate required fields
     if (empty($data['widget_id']) || empty($data['message'])) {
-        logMessage('Missing required fields', ['widget_id' => $data['widget_id'] ?? 'empty', 'message' => $data['message'] ?? 'empty']);
+        logMessage('Missing required fields', [
+            'widget_id' => $data['widget_id'] ?? 'missing',
+            'message' => $data['message'] ?? 'missing'
+        ]);
         sendErrorResponse('Widget ID and message are required');
         return;
     }
     
     try {
-        logMessage('Processing message for widget_id: ' . $data['widget_id'], [
-            'message' => $data['message'],
-            'url' => $data['url'] ?? 'Not provided',
-        ]);
-        
         // Get user by widget ID
         $user = $db->fetch(
             "SELECT * FROM users WHERE widget_id = :widget_id", 
             ['widget_id' => $data['widget_id']]
         );
         
-       if (!$user) {
+        if (!$user) {
             logMessage('User not found for widget_id', ['widget_id' => $data['widget_id']]);
             sendErrorResponse('Invalid widget ID or user not found');
             return;
         }
-        
-        logMessage('Found user', ['user_id' => $user['id'], 'name' => $user['name'] ?? 'Unknown']);
         
         // Get or create visitor
         $visitorId = getOrCreateVisitor($user['id'], $data);
@@ -377,38 +422,49 @@ function sendMessage() {
             return;
         }
         
-        logMessage('Using visitor', ['visitor_id' => $visitorId]);
-        
-        // Insert message with widget_id using direct SQL to handle 'read' reserved word
-        $messageSql = "INSERT INTO messages 
-                      (user_id, visitor_id, widget_id, message, sender_type, `read`, created_at) 
-                      VALUES (?, ?, ?, ?, ?, ?, NOW())";
-        
-        $db->query($messageSql, [
-            $user['id'],
-            $visitorId,
-            $data['widget_id'],
-            $data['message'],
-            'visitor',
-            0  // Not read
-        ]);
-        
-        // Get the inserted message ID and created_at timestamp
-        $messageRecord = $db->fetch(
-            "SELECT id, created_at FROM messages WHERE user_id = ? AND visitor_id = ? ORDER BY created_at DESC LIMIT 1",
-            [$user['id'], $visitorId]
-        );
-        
-        $messageId = $messageRecord ? $messageRecord['id'] : 0;
-        $createdAt = $messageRecord ? $messageRecord['created_at'] : date('Y-m-d H:i:s');
-        
-        if (!$messageId) {
-            logMessage('Failed to insert message into database');
-            sendErrorResponse('Database error: Failed to save message');
-            return;
+        // Insert message into database
+        try {
+            $db->query(
+                "INSERT INTO messages (user_id, visitor_id, widget_id, message, sender_type, `read`, created_at) 
+                VALUES (?, ?, ?, ?, ?, ?, NOW())",
+                [
+                    $user['id'],
+                    $visitorId,
+                    $data['widget_id'],
+                    $data['message'],
+                    'visitor',
+                    0  // Not read
+                ]
+            );
+            
+            // Get the ID of the inserted message
+            $messageId = $db->lastInsertId();
+            
+            if (!$messageId) {
+                // Fallback to querying for the message
+                $messageRecord = $db->fetch(
+                    "SELECT id, created_at FROM messages 
+                     WHERE user_id = ? AND visitor_id = ? AND message = ?
+                     ORDER BY created_at DESC LIMIT 1",
+                    [$user['id'], $visitorId, $data['message']]
+                );
+                
+                $messageId = $messageRecord ? $messageRecord['id'] : 0;
+                $createdAt = $messageRecord ? $messageRecord['created_at'] : date('Y-m-d H:i:s');
+            } else {
+                // Get created_at time
+                $messageRecord = $db->fetch(
+                    "SELECT created_at FROM messages WHERE id = ?",
+                    [$messageId]
+                );
+                $createdAt = $messageRecord ? $messageRecord['created_at'] : date('Y-m-d H:i:s');
+            }
+            
+            logMessage('Message saved successfully', ['message_id' => $messageId]);
+        } catch (Exception $e) {
+            logMessage('Error inserting message: ' . $e->getMessage());
+            throw new Exception('Failed to insert message: ' . $e->getMessage());
         }
-        
-        logMessage('Message saved to database', ['message_id' => $messageId]);
         
         // Check if user is online
         $isUserOnline = isUserOnline($user['id']);
@@ -430,28 +486,22 @@ function sendMessage() {
             
             $reply = $offlineMessage;
             
-            // Insert auto-reply with widget_id using direct SQL
-            $replySql = "INSERT INTO messages 
-                        (user_id, visitor_id, widget_id, message, sender_type, `read`, created_at) 
-                        VALUES (?, ?, ?, ?, ?, ?, NOW())";
-            
-            $db->query($replySql, [
-                $user['id'],
-                $visitorId,
-                $data['widget_id'],
-                $reply,
-                'agent',
-                0  // Not read initially
-            ]);
-            
-            // Get auto-reply message ID
-            $replyRecord = $db->fetch(
-                "SELECT id, created_at FROM messages WHERE user_id = ? AND visitor_id = ? ORDER BY created_at DESC LIMIT 1",
-                [$user['id'], $visitorId]
+            // Insert auto-reply
+            $db->query(
+                "INSERT INTO messages (user_id, visitor_id, widget_id, message, sender_type, `read`, created_at) 
+                VALUES (?, ?, ?, ?, ?, ?, NOW())",
+                [
+                    $user['id'],
+                    $visitorId,
+                    $data['widget_id'],
+                    $reply,
+                    'agent',
+                    0  // Not read initially
+                ]
             );
             
-            $replyId = $replyRecord ? $replyRecord['id'] : null;
-            $replyCreatedAt = $replyRecord ? $replyRecord['created_at'] : null;
+            // Get auto-reply message ID
+            $replyId = $db->lastInsertId();
         }
         
         // Update visitor's last activity
@@ -469,11 +519,10 @@ function sendMessage() {
             'reply_id' => $replyId
         ];
         
-        logMessage('Sending success response', $response);
         echo json_encode($response);
         
     } catch (Exception $e) {
-        logMessage('Error processing message: ' . $e->getMessage(), $e->getTraceAsString());
+        logMessage('Error processing message: ' . $e->getMessage());
         sendErrorResponse('Error sending message: ' . $e->getMessage());
     }
 }
@@ -633,27 +682,23 @@ function getMessages() {
         // Get messages
         $messages = $db->fetchAll($query, $params);
         
-        // Check if agent is currently typing to this visitor
-        $agentTyping = false;
+        // Set a default for agent_online to avoid errors
+        $agentOnline = false;
         
-        // Check for any recent agent activity for this visitor
-        if (tableExists($db, 'agent_typing')) {
-            $typingRecord = $db->fetch(
-                "SELECT * FROM agent_typing 
-                WHERE user_id = :user_id AND visitor_id = :visitor_id 
-                AND created_at > DATE_SUB(NOW(), INTERVAL 10 SECOND)",
-                ['user_id' => $user['id'], 'visitor_id' => $visitorId]
-            );
-            
-            $agentTyping = !empty($typingRecord);
+        // Try to check if user is online, but don't fail if there's an error
+        try {
+            $agentOnline = isUserOnline($user['id']);
+        } catch (Exception $e) {
+            logMessage('Error checking if agent is online: ' . $e->getMessage());
+            // Continue even if this fails
         }
         
         // Return success response
         echo json_encode([
             'success' => true,
             'messages' => $messages ?: [],
-            'agent_typing' => $agentTyping,
-            'agent_online' => isUserOnline($user['id'])
+            'agent_typing' => false,
+            'agent_online' => $agentOnline
         ]);
         
     } catch (Exception $e) {
@@ -663,7 +708,7 @@ function getMessages() {
 }
 
 /**
- * Get or create a visitor
+ * Get or create visitor
  */
 function getOrCreateVisitor($userId, $data) {
     global $db;
@@ -740,36 +785,62 @@ function getOrCreateVisitor($userId, $data) {
         'url' => $url
     ]);
     
-    // Create new visitor using query to avoid issues with table schema
-    $db->query(
-        "INSERT INTO visitors (user_id, ip_address, user_agent, url, created_at, last_active) 
-        VALUES (?, ?, ?, ?, NOW(), NOW())",
-        [
-            $userId,
-            $ip,
-            $userAgent,
-            $url
-        ]
-    );
-    
-    // Get the created visitor
-    $newVisitor = $db->fetch(
-        "SELECT id FROM visitors 
-        WHERE user_id = ? AND ip_address = ? 
-        ORDER BY created_at DESC 
-        LIMIT 1",
-        [$userId, $ip]
-    );
-    
-    if (!$newVisitor) {
-        logMessage('Failed to create visitor record');
+    try {
+        // First check if the visitors table exists
+        if (!tableExists($db, 'visitors')) {
+            logMessage('Visitors table does not exist');
+            return null;
+        }
+        
+        // Get the table structure to verify columns
+        $columns = $db->fetchAll("SHOW COLUMNS FROM visitors");
+        logMessage('Visitors table structure', $columns);
+        
+        // Create new visitor using query to avoid issues with table schema
+        $db->query(
+            "INSERT INTO visitors (user_id, ip_address, user_agent, url, created_at, last_active) 
+            VALUES (?, ?, ?, ?, NOW(), NOW())",
+            [
+                $userId,
+                $ip,
+                $userAgent,
+                $url
+            ]
+        );
+        
+        // Get the last insert ID directly instead of querying
+        $lastInsertId = $db->lastInsertId();
+        
+        if ($lastInsertId) {
+            logMessage('Created new visitor with ID', ['visitor_id' => $lastInsertId]);
+            return $lastInsertId;
+        }
+        
+        // Fall back to querying if lastInsertId() is not available or returns 0
+        $newVisitor = $db->fetch(
+            "SELECT id FROM visitors 
+            WHERE user_id = ? AND ip_address = ? 
+            ORDER BY created_at DESC 
+            LIMIT 1",
+            [$userId, $ip]
+        );
+        
+        if (!$newVisitor) {
+            logMessage('Failed to create visitor record - no matching record found after insert');
+            return null;
+        }
+        
+        $newVisitorId = $newVisitor['id'];
+        logMessage('Created new visitor', ['visitor_id' => $newVisitorId]);
+        
+        return $newVisitorId;
+    } catch (Exception $e) {
+        logMessage('Exception when creating visitor: ' . $e->getMessage(), [
+            'error_code' => $e->getCode(),
+            'stack_trace' => $e->getTraceAsString()
+        ]);
         return null;
     }
-    
-    $newVisitorId = $newVisitor['id'];
-    logMessage('Created new visitor', ['visitor_id' => $newVisitorId]);
-    
-    return $newVisitorId;
 }
 
 /**

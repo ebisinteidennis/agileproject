@@ -28,6 +28,12 @@ $user = getUserById($userId);
 $visitorId = $data['visitor_id'];
 $message = sanitizeInput($data['message']);
 
+// Get the widget_id from session (set in chat.php)
+$widgetId = isset($_SESSION['current_visitor_widget_id']) ? $_SESSION['current_visitor_widget_id'] : null;
+
+// Log for debugging
+error_log("Sending message to visitor {$visitorId} using widget_id: " . ($widgetId ?? 'unknown'));
+
 // Check subscription status
 if (!isSubscriptionActive($user)) {
     header('Content-Type: application/json');
@@ -54,7 +60,7 @@ if (!canSendMessage($userId)) {
     exit;
 }
 
-// Save message
+// Prepare message data
 $messageData = [
     'user_id' => $userId,
     'visitor_id' => $visitorId,
@@ -62,9 +68,21 @@ $messageData = [
     'sender_type' => 'agent'
 ];
 
+// Include widget_id if available
+if ($widgetId) {
+    $messageData['widget_id'] = $widgetId;
+}
+
+// Save message
 $messageId = $db->insert('messages', $messageData);
 
 if ($messageId) {
+    // Update visitor's last activity
+    $db->query(
+        "UPDATE visitors SET last_active = NOW() WHERE id = :id",
+        ['id' => $visitorId]
+    );
+    
     header('Content-Type: application/json');
     echo json_encode(['success' => true, 'message_id' => $messageId]);
 } else {

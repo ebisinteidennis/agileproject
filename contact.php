@@ -75,7 +75,7 @@ include 'includes/header.php';
                 <div class="contact-method">
                     <div class="method-icon">📱</div>
                     <h3>Phone</h3>
-                    <p>+234 800 123 4567</p>
+                    <p>+2348029074091</p>
                     <p>Monday - Friday, 9am - 5pm WAT</p>
                 </div>
                 

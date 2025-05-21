@@ -10,17 +10,43 @@ requireLogin();
 $userId = $_SESSION['user_id'];
 $user = getUserById($userId);
 
-// Fixed error handling for messages
-$messages = $db->fetchAll(
-    "SELECT * FROM messages WHERE user_id = :user_id ORDER BY created_at DESC LIMIT 5", 
-    ['user_id' => $userId]
-) ?: [];
+// Get user's widget_id - this is important for filtering messages by widget
+$widgetId = isset($user['widget_id']) ? $user['widget_id'] : null;
 
-// Fixed unread messages count
-$unreadCount = $db->fetch(
-    "SELECT COUNT(*) as count FROM messages WHERE user_id = :user_id AND sender_type = 'visitor' AND `read` = 0", 
-    ['user_id' => $userId]
-);
+// Check if widget_id column exists in messages table
+$hasWidgetIdColumn = false;
+try {
+    $columnsResult = $db->fetchAll("SHOW COLUMNS FROM messages LIKE 'widget_id'");
+    $hasWidgetIdColumn = !empty($columnsResult);
+} catch (Exception $e) {
+    error_log("Error checking for widget_id column: " . $e->getMessage());
+}
+
+// Modified query to include widget_id when fetching messages if the column exists
+$messagesQuery = "SELECT * FROM messages WHERE user_id = :user_id";
+if ($hasWidgetIdColumn && $widgetId) {
+    $messagesQuery .= " AND widget_id = :widget_id";
+}
+$messagesQuery .= " ORDER BY created_at DESC LIMIT 5";
+$messagesParams = ['user_id' => $userId];
+if ($hasWidgetIdColumn && $widgetId) {
+    $messagesParams['widget_id'] = $widgetId;
+}
+
+// Fixed error handling for messages
+$messages = $db->fetchAll($messagesQuery, $messagesParams) ?: [];
+
+// Modified query for unread messages to include widget_id if available
+$unreadQuery = "SELECT COUNT(*) as count FROM messages WHERE user_id = :user_id AND sender_type = 'visitor' AND `read` = 0";
+if ($hasWidgetIdColumn && $widgetId) {
+    $unreadQuery .= " AND widget_id = :widget_id";
+}
+$unreadParams = ['user_id' => $userId];
+if ($hasWidgetIdColumn && $widgetId) {
+    $unreadParams['widget_id'] = $widgetId;
+}
+
+$unreadCount = $db->fetch($unreadQuery, $unreadParams);
 $unreadMessages = $unreadCount ? $unreadCount['count'] : 0;
 
 // Fixed visitors retrieval - reducing to 3 for better display
@@ -28,6 +54,20 @@ $visitors = $db->fetchAll(
     "SELECT * FROM visitors WHERE user_id = :user_id ORDER BY last_active DESC LIMIT 3", 
     ['user_id' => $userId]
 ) ?: [];
+
+// For each visitor, get their associated widget_id if available
+if ($hasWidgetIdColumn) {
+    foreach ($visitors as $key => $visitor) {
+        $visitorWidget = $db->fetch(
+            "SELECT widget_id FROM messages 
+             WHERE user_id = :user_id AND visitor_id = :visitor_id AND widget_id IS NOT NULL
+             ORDER BY created_at DESC 
+             LIMIT 1",
+            ['user_id' => $userId, 'visitor_id' => $visitor['id']]
+        );
+        $visitors[$key]['widget_id'] = $visitorWidget ? $visitorWidget['widget_id'] : null;
+    }
+}
 
 // Proper subscription handling with null checks
 $subscription = null;
@@ -50,12 +90,23 @@ if (isset($user['subscription_id']) && !empty($user['subscription_id'])) {
     }
 }
 
-// Get message count safely
+// Get message count safely - modified to include widget_id if available
 $messageCount = 0;
 try {
-    $messageCount = getMessageCount($userId);
+    $messageCountQuery = "SELECT COUNT(*) as count FROM messages WHERE user_id = :user_id";
+    if ($hasWidgetIdColumn && $widgetId) {
+        $messageCountQuery .= " AND widget_id = :widget_id";
+    }
+    $messageCountParams = ['user_id' => $userId];
+    if ($hasWidgetIdColumn && $widgetId) {
+        $messageCountParams['widget_id'] = $widgetId;
+    }
+    
+    $messageCountResult = $db->fetch($messageCountQuery, $messageCountParams);
+    $messageCount = $messageCountResult ? $messageCountResult['count'] : 0;
 } catch (Exception $e) {
     // Handle silently
+    error_log("Error getting message count: " . $e->getMessage());
 }
 
 // Get visitor count safely
@@ -68,6 +119,7 @@ try {
     $visitorCount = $visitorCountResult ? $visitorCountResult['count'] : 0;
 } catch (Exception $e) {
     // Handle silently
+    error_log("Error getting visitor count: " . $e->getMessage());
 }
 
 // Get the full site URL for embedding
@@ -402,6 +454,16 @@ include '../includes/header.php';
   border-radius: 4px;
   font-size: 0.9rem;
 }
+
+.widget-id-badge {
+  display: inline-block;
+  background-color: #f0f0f0;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 0.8rem;
+  color: #666;
+  margin-top: 5px;
+}
 </style>
 
 <main class="container dashboard-container">
@@ -542,6 +604,9 @@ var WIDGET_ID = &quot;<?php echo htmlspecialchars($user['widget_id'] ?? ''); ?>&
                                                     }
                                                     ?>
                                                 </div>
+                                                <?php if (isset($visitor['widget_id']) && $visitor['widget_id']): ?>
+                                                    <div class="widget-id-badge">Widget: <?php echo substr($visitor['widget_id'], 0, 8); ?>...</div>
+                                                <?php endif; ?>
                                             </div>
                                         </div>
                                         <div class="visitor-actions">
@@ -577,6 +642,9 @@ var WIDGET_ID = &quot;<?php echo htmlspecialchars($user['widget_id'] ?? ''); ?>&
                                         <div class="message-header">
                                             <span class="message-sender"><?php echo $message['sender_type'] === 'visitor' ? 'Visitor' : 'You'; ?></span>
                                             <span class="message-time"><?php echo date('M j, g:i a', strtotime($message['created_at'])); ?></span>
+                                            <?php if ($hasWidgetIdColumn && isset($message['widget_id']) && $message['widget_id']): ?>
+                                                <span class="widget-id-badge">Widget: <?php echo substr($message['widget_id'], 0, 8); ?>...</span>
+                                            <?php endif; ?>
                                         </div>
                                         <div class="message-content"><?php echo htmlspecialchars($message['message'] ?? ''); ?></div>
                                         <?php if ($message['sender_type'] === 'visitor' && isset($message['read']) && !$message['read']): ?>
@@ -682,13 +750,30 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (unreadElement) {
                         unreadElement.textContent = data.new_messages;
                     }
+                    
+                    // Optionally play notification sound for new messages
+                    playNotificationSound();
                 }
             })
             .catch(error => console.error('Error checking messages:', error));
     };
     
+    // Play notification sound
+    function playNotificationSound() {
+        try {
+            const audio = new Audio('/sounds/notification.mp3');
+            audio.volume = 0.5;
+            audio.play().catch(e => console.log('Could not play notification sound:', e));
+        } catch (e) {
+            console.log('Notification sound not supported');
+        }
+    }
+    
     // Check for new messages every 60 seconds
     setInterval(checkNewMessages, 60000);
+    
+    // Initial check for new messages
+    checkNewMessages();
 });
 </script>
 

@@ -59,4 +59,56 @@ $settings = getSiteSettings();
                 </ul>
             </nav>
         </div>
+        <script>
+// Mobile Menu Toggle Functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
+    const mainNav = document.getElementById('main-nav');
+    const menuOverlay = document.createElement('div');
+    menuOverlay.className = 'menu-overlay';
+    document.body.appendChild(menuOverlay);
+    
+    // Toggle menu when hamburger icon is clicked
+    mobileMenuToggle.addEventListener('click', function() {
+        mainNav.classList.toggle('active');
+        menuOverlay.classList.toggle('active');
+        
+        // Change hamburger icon to X when menu is open
+        if (mainNav.classList.contains('active')) {
+            mobileMenuToggle.innerHTML = '<span>✕</span>';
+        } else {
+            mobileMenuToggle.innerHTML = '<span>☰</span>';
+        }
+    });
+    
+    // Close menu when clicking on overlay
+    menuOverlay.addEventListener('click', function() {
+        mainNav.classList.remove('active');
+        menuOverlay.classList.remove('active');
+        mobileMenuToggle.innerHTML = '<span>☰</span>';
+    });
+    
+    // Close menu when clicking on a link (for mobile)
+    const menuLinks = mainNav.querySelectorAll('a');
+    menuLinks.forEach(link => {
+        link.addEventListener('click', function() {
+            // Only trigger on mobile
+            if (window.innerWidth <= 768) {
+                mainNav.classList.remove('active');
+                menuOverlay.classList.remove('active');
+                mobileMenuToggle.innerHTML = '<span>☰</span>';
+            }
+        });
+    });
+    
+    // Ensure menu state is correct on window resize
+    window.addEventListener('resize', function() {
+        if (window.innerWidth > 768) {
+            mainNav.classList.remove('active');
+            menuOverlay.classList.remove('active');
+            mobileMenuToggle.innerHTML = '<span>☰</span>';
+        }
+    });
+});
+</script>
     </header>

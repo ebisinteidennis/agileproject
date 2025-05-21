@@ -14,15 +14,15 @@
     // Configuration
     var config = {
         widgetId: WIDGET_ID,
-        baseUrl: getBaseUrl(),
+        baseUrl: 'https://agileproject.site', // Default URL, will be updated from server
         visitorId: getOrCreateVisitorId(),
-        messages: [], // Store messages locally
+        messages: [],
         theme: 'light',
         position: 'bottom-right',
         primaryColor: '#4a6cf7'
     };
     
-    // Debug mode
+    // Debug mode - set to true to enable detailed logging
     var DEBUG = true;
     
     // For real-time messaging
@@ -34,27 +34,6 @@
         if (DEBUG && console && console.log) {
             console.log.apply(console, ['LiveSupport Widget:'].concat(Array.prototype.slice.call(arguments)));
         }
-    }
-    
-    log('Initializing with widget ID:', config.widgetId);
-    log('Base URL:', config.baseUrl);
-    log('Visitor ID:', config.visitorId);
-    
-    // Get base URL from script src
-    function getBaseUrl() {
-        var scripts = document.getElementsByTagName('script');
-        var currentScript = scripts[scripts.length - 1];
-        var src = currentScript.src || '';
-        
-        // If we can't determine the base URL, use the current domain
-        if (!src || src.indexOf('/widget/embed.js') === -1) {
-            var protocol = window.location.protocol;
-            var hostname = window.location.hostname;
-            return protocol + '//' + hostname;
-        }
-        
-        // Extract base URL from script src
-        return src.substring(0, src.indexOf('/widget'));
     }
     
     // Generate or retrieve visitor ID
@@ -73,16 +52,49 @@
                Math.random().toString(36).substring(2, 15);
     }
     
+    // Format API URL to ensure proper structure
+    function formatApiUrl(baseUrl, endpoint) {
+        // Remove trailing slash from baseUrl if present
+        if (baseUrl.endsWith('/')) {
+            baseUrl = baseUrl.slice(0, -1);
+        }
+        
+        // Add leading slash to endpoint if not present
+        if (!endpoint.startsWith('/')) {
+            endpoint = '/' + endpoint;
+        }
+        
+        return baseUrl + endpoint;
+    }
+    
     // Load widget styles
     function loadStyles() {
         var style = document.createElement('style');
         style.textContent = `
+            @keyframes livesupport-fade-in {
+                from { opacity: 0; transform: translateY(20px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            
+            @keyframes livesupport-pulse {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.05); }
+                100% { transform: scale(1); }
+            }
+            
             .livesupport-widget {
                 position: fixed;
-                z-index: 9999;
+                z-index: 999999;
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', sans-serif;
                 font-size: 14px;
                 line-height: 1.4;
+                box-sizing: border-box;
+            }
+            
+            .livesupport-widget *,
+            .livesupport-widget *:before,
+            .livesupport-widget *:after {
+                box-sizing: inherit;
             }
             
             .livesupport-widget.bottom-right {
@@ -90,90 +102,149 @@
                 right: 20px;
             }
             
+            .livesupport-widget.bottom-left {
+                bottom: 20px;
+                left: 20px;
+            }
+            
+            .livesupport-widget.top-right {
+                top: 20px;
+                right: 20px;
+            }
+            
+            .livesupport-widget.top-left {
+                top: 20px;
+                left: 20px;
+            }
+            
             .livesupport-button {
                 width: 60px;
                 height: 60px;
                 border-radius: 50%;
-                background-color: #4a6cf7;
-                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+                background-color: ${config.primaryColor};
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 cursor: pointer;
                 color: white;
+                transition: all 0.3s ease;
+                animation: livesupport-pulse 2s infinite ease-in-out;
+            }
+            
+            .livesupport-button:hover {
+                transform: scale(1.1);
+                box-shadow: 0 6px 25px rgba(0, 0, 0, 0.25);
             }
             
             .livesupport-chat-window {
                 position: absolute;
                 bottom: 80px;
                 right: 0;
-                width: 320px;
-                height: 400px;
+                width: 350px;
+                height: 480px;
                 background-color: white;
-                border-radius: 10px;
-                box-shadow: 0 5px 40px rgba(0, 0, 0, 0.16);
+                border-radius: 16px;
+                box-shadow: 0 10px 50px rgba(0, 0, 0, 0.2);
                 display: none;
                 flex-direction: column;
                 overflow: hidden;
+                transition: all 0.3s ease;
+                animation: livesupport-fade-in 0.3s ease-out;
+                border: 1px solid rgba(0, 0, 0, 0.1);
             }
             
             .livesupport-header {
-                background-color: #4a6cf7;
+                background-color: ${config.primaryColor};
                 color: white;
-                padding: 15px;
+                padding: 18px 20px;
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
+                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
             }
             
             .livesupport-header-title {
-                font-weight: bold;
+                font-weight: 600;
+                font-size: 16px;
             }
             
             .livesupport-header-close {
                 cursor: pointer;
                 font-size: 24px;
+                line-height: 0.8;
+                padding: 5px;
+                transition: all 0.2s ease;
+                border-radius: 50%;
+            }
+            
+            .livesupport-header-close:hover {
+                background-color: rgba(255, 255, 255, 0.2);
             }
             
             .livesupport-messages {
                 flex: 1;
-                padding: 15px;
+                padding: 20px;
                 overflow-y: auto;
-                background-color: #f9f9f9;
+                background-color: #f8f9fb;
+                scroll-behavior: smooth;
+            }
+            
+            .livesupport-messages::-webkit-scrollbar {
+                width: 8px;
+            }
+            
+            .livesupport-messages::-webkit-scrollbar-track {
+                background: rgba(0, 0, 0, 0.05);
+                border-radius: 4px;
+            }
+            
+            .livesupport-messages::-webkit-scrollbar-thumb {
+                background: rgba(0, 0, 0, 0.2);
+                border-radius: 4px;
             }
             
             .livesupport-message {
-                margin-bottom: 10px;
+                margin-bottom: 16px;
                 display: flex;
                 flex-direction: column;
+                animation: livesupport-fade-in 0.3s ease-out;
             }
             
             .livesupport-message-bubble {
-                padding: 10px 12px;
-                border-radius: 15px;
-                max-width: 80%;
+                padding: 12px 16px;
+                border-radius: 18px;
+                max-width: 85%;
                 word-wrap: break-word;
+                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+                line-height: 1.5;
             }
             
             .livesupport-user .livesupport-message-bubble {
-                background-color: #4a6cf7;
+                background-color: ${config.primaryColor};
                 color: white;
                 margin-left: auto;
-                border-bottom-right-radius: 4px;
+                border-bottom-right-radius: 6px;
             }
             
             .livesupport-agent .livesupport-message-bubble {
-                background-color: #e5e5ea;
-                color: black;
+                background-color: white;
+                color: #333;
                 margin-right: auto;
-                border-bottom-left-radius: 4px;
+                border-bottom-left-radius: 6px;
+                border: 1px solid rgba(0, 0, 0, 0.08);
             }
             
             .livesupport-system {
                 text-align: center;
-                margin: 10px 0;
+                margin: 14px 0;
                 color: #666;
                 font-size: 12px;
+                background-color: rgba(0, 0, 0, 0.05);
+                padding: 8px 12px;
+                border-radius: 12px;
+                width: fit-content;
+                margin: 10px auto;
             }
             
             .livesupport-message-time {
@@ -184,58 +255,128 @@
             }
             
             .livesupport-input-container {
-                padding: 10px;
-                border-top: 1px solid #eee;
+                padding: 15px;
+                border-top: 1px solid rgba(0, 0, 0, 0.08);
                 background-color: white;
                 display: flex;
+                align-items: flex-end;
+            }
+            
+            .livesupport-input-wrapper {
+                flex: 1;
+                position: relative;
+                border: 1px solid #ddd;
+                border-radius: 24px;
+                background-color: #f8f9fb;
+                transition: all 0.2s ease;
+                overflow: hidden;
+            }
+            
+            .livesupport-input-wrapper:focus-within {
+                border-color: ${config.primaryColor};
+                box-shadow: 0 0 0 2px rgba(74, 108, 247, 0.2);
             }
             
             .livesupport-input {
-                flex: 1;
-                border: 1px solid #ddd;
-                border-radius: 20px;
-                padding: 8px 12px;
+                width: 100%;
+                border: none;
                 outline: none;
                 resize: none;
-                height: 40px;
-                max-height: 100px;
-                overflow-y: auto;
+                padding: 12px 16px;
+                max-height: 120px;
+                background-color: transparent;
+                font-family: inherit;
+                font-size: 14px;
+                line-height: 1.4;
             }
             
             .livesupport-send {
-                background-color: #4a6cf7;
+                background-color: ${config.primaryColor};
                 color: white;
                 border: none;
                 border-radius: 50%;
                 width: 40px;
                 height: 40px;
-                margin-left: 10px;
+                margin-left: 12px;
                 cursor: pointer;
                 display: flex;
                 align-items: center;
                 justify-content: center;
+                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+                transition: all 0.2s ease;
+            }
+            
+            .livesupport-send:hover {
+                background-color: #6C8EFF;
+                transform: scale(1.05);
             }
             
             .livesupport-send:disabled {
                 opacity: 0.5;
                 cursor: not-allowed;
+                transform: scale(1);
             }
             
             .livesupport-notification {
                 position: absolute;
-                top: -10px;
-                right: -5px;
+                top: -8px;
+                right: -8px;
                 background-color: #ff4136;
                 color: white;
                 border-radius: 50%;
-                width: 20px;
+                min-width: 20px;
                 height: 20px;
                 font-size: 12px;
-                display: flex;
+                display: none;
                 align-items: center;
                 justify-content: center;
                 font-weight: bold;
-                display: none;
+                padding: 2px 6px;
+                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+                animation: livesupport-fade-in 0.3s ease-out;
+            }
+            
+            .livesupport-branding {
+                text-align: center;
+                padding: 8px;
+                font-size: 11px;
+                color: #999;
+                background-color: #f8f9fb;
+                border-top: 1px solid rgba(0, 0, 0, 0.05);
+            }
+            
+            .livesupport-branding a {
+                color: ${config.primaryColor};
+                text-decoration: none;
+            }
+            
+            /* Responsive Adjustments */
+            @media (max-width: 480px) {
+                .livesupport-chat-window {
+                    width: 300px;
+                    height: 450px;
+                    bottom: 70px;
+                }
+                
+                .livesupport-button {
+                    width: 50px;
+                    height: 50px;
+                }
+            }
+            
+            /* Mobile Full Screen Mode */
+            @media (max-width: 380px) {
+                .livesupport-chat-window.mobile-fullscreen {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    width: 100%;
+                    height: 100%;
+                    border-radius: 0;
+                    z-index: 1000000;
+                }
             }
         `;
         document.head.appendChild(style);
@@ -273,7 +414,7 @@
         // Create greeting message
         var greetingMessage = document.createElement('div');
         greetingMessage.className = 'livesupport-system';
-        greetingMessage.textContent = 'Hi there! How can we help you today?';
+        greetingMessage.textContent = config.greetingMessage || 'Hi there! How can we help you today?';
         messagesContainer.appendChild(greetingMessage);
         
         // Create input container
@@ -281,12 +422,17 @@
         inputContainer.className = 'livesupport-input-container';
         chatWindow.appendChild(inputContainer);
         
+        // Create input wrapper
+        var inputWrapper = document.createElement('div');
+        inputWrapper.className = 'livesupport-input-wrapper';
+        inputContainer.appendChild(inputWrapper);
+        
         // Create input field
         var input = document.createElement('textarea');
         input.className = 'livesupport-input';
         input.placeholder = 'Type a message...';
         input.rows = 1;
-        inputContainer.appendChild(input);
+        inputWrapper.appendChild(input);
         
         // Create send button
         var sendButton = document.createElement('button');
@@ -294,15 +440,25 @@
         sendButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>';
         inputContainer.appendChild(sendButton);
         
+        // Create branding footer
+        var branding = document.createElement('div');
+        branding.className = 'livesupport-branding';
+        branding.innerHTML = 'Powered by <a href="' + config.baseUrl + '" target="_blank">LiveSupport</a>';
+        chatWindow.appendChild(branding);
+        
         // Add event listeners
         button.addEventListener('click', function() {
-            chatWindow.style.display = chatWindow.style.display === 'flex' ? 'none' : 'flex';
             if (chatWindow.style.display === 'flex') {
-                // Load messages when chat is opened
+                chatWindow.style.display = 'none';
+            } else {
+                chatWindow.style.display = 'flex';
+                // Load messages when opened
                 loadMessages();
-                input.focus();
-                
-                // Clear notification when opening chat
+                // Focus input
+                setTimeout(function() {
+                    input.focus();
+                }, 300);
+                // Clear notification
                 var notification = button.querySelector('.livesupport-notification');
                 notification.style.display = 'none';
                 notification.textContent = '0';
@@ -322,8 +478,17 @@
             // Auto-resize textarea
             setTimeout(function() {
                 input.style.height = 'auto';
-                input.style.height = Math.min(input.scrollHeight, 100) + 'px';
+                input.style.height = Math.min(input.scrollHeight, 120) + 'px';
             }, 0);
+        });
+        
+        input.addEventListener('input', function() {
+            // Enable/disable send button based on input
+            sendButton.disabled = input.value.trim() === '';
+            
+            // Auto-resize textarea
+            input.style.height = 'auto';
+            input.style.height = Math.min(input.scrollHeight, 120) + 'px';
         });
         
         sendButton.addEventListener('click', sendMessage);
@@ -339,28 +504,18 @@
             notification: button.querySelector('.livesupport-notification')
         };
         
-        // Set primary color
-        setColor(config.primaryColor);
-        
-        // Register visitor
-        registerVisitor();
-        
         // Start polling for messages
         startMessagePolling();
+        
+        // Add mobile fullscreen class on small screens
+        if (window.innerWidth <= 380) {
+            chatWindow.classList.add('mobile-fullscreen');
+        }
         
         return container;
     }
     
-    // Set primary color
-    function setColor(color) {
-        var elements = config.elements;
-        if (!elements) return;
-        
-        elements.button.style.backgroundColor = color;
-        elements.chatWindow.querySelector('.livesupport-header').style.backgroundColor = color;
-    }
-    
-    // Send message to server
+    // Send message
     function sendMessage() {
         var input = config.elements.input;
         var message = input.value.trim();
@@ -496,9 +651,14 @@
         // Don't check if we don't have a visitor ID yet
         if (!config.visitorId) return;
         
-        fetch(config.baseUrl + '/widget/api.php?action=get_messages&widget_id=' + 
-            encodeURIComponent(config.widgetId) + '&visitor_id=' + 
-            encodeURIComponent(config.visitorId) + '&since=' + lastMessageCheck)
+        var apiUrl = formatApiUrl(config.baseUrl, '/widget/api.php') + 
+            '?action=get_messages&widget_id=' + encodeURIComponent(config.widgetId) + 
+            '&visitor_id=' + encodeURIComponent(config.visitorId) + 
+            '&since=' + lastMessageCheck;
+        
+        log('Checking for new messages at URL:', apiUrl);
+        
+        fetch(apiUrl)
         .then(function(response) {
             if (!response.ok) {
                 throw new Error('Network response was not ok: ' + response.status);
@@ -556,103 +716,147 @@
         });
     }
     
-    // Send message to server
+    // Send message to server via form submission
     function sendMessageToServer(message) {
-        log('Sending message to server:', message);
-        
-        // Debug log widget ID to verify it's being passed correctly
-        log('DEBUG: Using widget ID:', config.widgetId);
-        
-        // Ensure we have a widget ID to send
-        if (!config.widgetId) {
-            log('ERROR: Widget ID not available for sending message');
-            addMessage('system', 'Configuration error. Please refresh the page and try again.');
-            
-            // Try to recover by using global widget ID directly
-            if (window.WIDGET_ID) {
-                config.widgetId = window.WIDGET_ID;
-                log('RECOVERY: Set widget ID from global variable:', config.widgetId);
-            } else {
-                log('CRITICAL: Unable to recover widget ID');
-                return;
-            }
-        }
+        log('Sending message via form submission:', message);
         
         // Disable send button during sending
         if (config.elements.sendButton) {
             config.elements.sendButton.disabled = true;
         }
         
-        // Prepare data with explicit widget_id
-        var data = {
-            widget_id: config.widgetId,
-            message: message,
-            url: window.location.href,
-            referrer: document.referrer,
-            user_agent: navigator.userAgent,
-            visitor_id: config.visitorId  // Include visitor ID as well
+        // Create a simple form element
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = formatApiUrl(config.baseUrl, '/widget/api.php?action=send_message');
+        form.style.display = 'none';
+        
+        // Add message data as hidden fields
+        var fields = {
+            'widget_id': config.widgetId,
+            'message': message,
+            'visitor_id': config.visitorId,
+            'url': window.location.href,
+            'user_agent': navigator.userAgent
         };
         
-        // Log exact data being sent
-        log('DEBUG: Sending data:', JSON.stringify(data));
+        // Create hidden fields for each data item
+        for (var key in fields) {
+            var input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = key;
+            input.value = fields[key];
+            form.appendChild(input);
+        }
         
-        // Construct the full URL
-        var apiUrl = config.baseUrl + '/widget/api.php?action=send_message';
-        log('DEBUG: Sending to URL:', apiUrl);
+        // Create hidden iframe as target to prevent page navigation
+        var iframe = document.createElement('iframe');
+        iframe.name = 'send_message_frame_' + new Date().getTime();
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
         
-        // Send request
-        fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify(data)
-        })
-        .then(function(response) {
+        // Set form target to the iframe
+        form.target = iframe.name;
+        document.body.appendChild(form);
+        
+        // Process response when iframe loads
+        iframe.onload = function() {
+            try {
+                // Get response from iframe
+                var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                var response = iframeDoc.body.innerHTML;
+                log('Raw response:', response);
+                
+                // Try to parse JSON response
+                var responseData = JSON.parse(response);
+                log('Parsed response:', responseData);
+                
+                // Handle successful message
+                if (responseData.success) {
+                    log('Message sent successfully');
+                    
+                    // If there's an auto-reply, add it
+                    if (responseData.reply) {
+                        setTimeout(function() {
+                            addMessage('agent', responseData.reply, null, responseData.reply_id);
+                            storeMessage('agent', responseData.reply, responseData.created_at, responseData.reply_id);
+                        }, 1000);
+                    }
+                    
+                    // Update last message check time
+                    lastMessageCheck = Date.now();
+                } else {
+                    // Handle error from server
+                    log('Error from server:', responseData.error);
+                    addMessage('system', 'Error: ' + (responseData.error || 'Unknown error'));
+                }
+            } catch (e) {
+                // Handle parsing errors
+                log('Error processing response:', e);
+                // Check if we got any response at all
+                var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                if (iframeDoc && iframeDoc.body && iframeDoc.body.innerHTML) {
+                    log('Non-JSON response received:', iframeDoc.body.innerHTML);
+                    
+                    // If we got any response, consider it a success
+                    if (iframeDoc.body.innerHTML.length > 0) {
+                        log('Received non-empty response, assuming success');
+                        lastMessageCheck = Date.now();
+                    } else {
+                        addMessage('system', 'Error: Could not process server response');
+                    }
+                } else {
+                    addMessage('system', 'Error: No response from server');
+                }
+            }
+            
             // Re-enable send button
             if (config.elements.sendButton) {
                 config.elements.sendButton.disabled = false;
             }
             
-            // Log raw response for debugging
-            log('DEBUG: Received response with status:', response.status);
+            // Clean up
+            setTimeout(function() {
+                document.body.removeChild(form);
+                document.body.removeChild(iframe);
+            }, 100);
+        };
+        
+        // Handle iframe errors
+        iframe.onerror = function() {
+            log('Iframe error');
+            addMessage('system', 'Connection error. Please try again later.');
             
-            if (!response.ok) {
-                throw new Error('Network response was not ok: ' + response.status);
+            // Re-enable send button
+            if (config.elements.sendButton) {
+                config.elements.sendButton.disabled = false;
             }
-            return response.json();
-        })
-        .then(function(responseData) {
-            log('Server response:', responseData);
             
-            if (responseData.success) {
-                log('Message sent successfully');
+            // Clean up
+            document.body.removeChild(form);
+            document.body.removeChild(iframe);
+        };
+        
+        // Set a timeout in case the iframe never loads
+        setTimeout(function() {
+            if (document.body.contains(iframe)) {
+                log('Request timeout');
+                addMessage('system', 'Request timed out. Please try again later.');
                 
-                // If there's an auto-reply, add it
-                if (responseData.reply) {
-                    setTimeout(function() {
-                        addMessage('agent', responseData.reply);
-                        storeMessage('agent', responseData.reply);
-                    }, 1000);
+                // Re-enable send button
+                if (config.elements.sendButton) {
+                    config.elements.sendButton.disabled = false;
                 }
                 
-                // Update last message check time
-                lastMessageCheck = Date.now();
-            } else {
-                log('Error from server:', responseData.error);
-                addMessage('system', 'Error sending message: ' + (responseData.error || 'Unknown error'));
+                // Clean up
+                if (document.body.contains(form)) document.body.removeChild(form);
+                if (document.body.contains(iframe)) document.body.removeChild(iframe);
             }
-        })
-        .catch(function(error) {
-            // Re-enable send button
-            if (config.elements.sendButton) {
-                config.elements.sendButton.disabled = false;
-            }
-            
-            log('Error sending message:', error);
-            addMessage('system', 'Connection error. Please try again later.');
-        });
+        }, 15000); // 15 second timeout
+        
+        // Submit the form
+        log('Submitting form');
+        form.submit();
     }
     
     // Register visitor with the server
@@ -667,7 +871,11 @@
             visitor_id: config.visitorId
         };
         
-        fetch(config.baseUrl + '/widget/api.php?action=register_visitor', {
+        var apiUrl = formatApiUrl(config.baseUrl, '/widget/api.php?action=register_visitor');
+        
+        log('Registering visitor at URL:', apiUrl);
+        
+        fetch(apiUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -696,39 +904,86 @@
     }
     
     // Initialize widget
-    function init() {
-        log('Initializing widget');
-        
-        // Verify WIDGET_ID is available globally
-        if (!window.WIDGET_ID) {
-            console.error('LiveSupport Widget: WIDGET_ID not defined. Please set WIDGET_ID before loading embed.js');
-            return;
-        }
-        
-        // Ensure widget ID is set correctly in config
-        config.widgetId = window.WIDGET_ID;
-        log('Using widget ID:', config.widgetId);
-        
-        // Add widget ID to the initialization info in local storage
+    function initializeWidget() {
         try {
-            localStorage.setItem('livesupport_widget_id', config.widgetId);
-        } catch (e) {
-            log('Error saving widget ID to localStorage:', e);
+            // Get widget configuration first
+            var configUrl = formatApiUrl('https://agileproject.site', '/widget/api.php?action=get_config&widget_id=' + WIDGET_ID);
+            
+            log('Fetching widget configuration from:', configUrl);
+            
+            fetch(configUrl)
+                .then(function(response) {
+                    if (!response.ok) {
+                        throw new Error('Failed to load widget configuration: ' + response.status);
+                    }
+                    return response.json();
+                })
+                .then(function(data) {
+                    log('Widget config response:', data);
+                    
+                    if (data.success && data.config) {
+                        // Update the site URL if provided
+                        if (data.config.siteUrl) {
+                            config.baseUrl = data.config.siteUrl;
+                            log('Updated baseUrl to:', config.baseUrl);
+                        }
+                        
+                        // Update other config options
+                        if (data.config.primaryColor) {
+                            config.primaryColor = data.config.primaryColor;
+                        }
+                        
+                        if (data.config.position) {
+                            config.position = data.config.position;
+                        }
+                        
+                        if (data.config.greetingMessage) {
+                            config.greetingMessage = data.config.greetingMessage;
+                        }
+                        
+                        // Continue with widget initialization
+                        loadStyles();
+                        createWidget();
+                        
+                        // Register visitor
+                        registerVisitor();
+                    } else {
+                        log('Invalid configuration response', data);
+                        // Initialize with defaults as fallback
+                        loadStyles();
+                        createWidget();
+                        registerVisitor();
+                    }
+                })
+                .catch(function(error) {
+                    log('Error loading configuration:', error);
+                    // Initialize with defaults
+                    loadStyles();
+                    createWidget();
+                    registerVisitor();
+                });
+        } catch (err) {
+            console.error('LiveSupport Widget: Initialization failed:', err);
+            // Fallback to default initialization
+            loadStyles();
+            createWidget();
+            registerVisitor();
         }
-        
-        // Load styles
-        loadStyles();
-        
-        // Create widget
-        createWidget();
-        
-        log('Widget initialized successfully');
     }
     
-    // Start when DOM is ready
+    // Ensure the widget is initialized when the page is ready
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(initializeWidget, 1000);
+        });
     } else {
-        init();
+        setTimeout(initializeWidget, 1000);
     }
+    
+    // Add fallback initialization
+    window.addEventListener('load', function() {
+        if (!document.querySelector('.livesupport-widget')) {
+            initializeWidget();
+        }
+    });
 })();

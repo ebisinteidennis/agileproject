@@ -1,0 +1,1596 @@
+[2025-05-20 12:13:46] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:13:52
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:13:46] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:13:48] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:13:52
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:13:48] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:13:51] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:13:52
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:13:51] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:13:53] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:13:52
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:13:53] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:14:05] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:14:05] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:14:07] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:14:07] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:14:09] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:14:09] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:14:11] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:14:11] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:14:13] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:14:13] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:14:15] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:14:15] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:14:17] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:14:17] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:14:19] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:14:19] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:14:21] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:14:21] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:14:23] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:14:23] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:14:25] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:14:25] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:14:26] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:14:26] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:14:33] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:14:33] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:14:34] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:14:34] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:14:39] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:14:39] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:14:40] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:14:40] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:14:51] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:14:51] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:15:01] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:15:01] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:15:11] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:15:11] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:15:15] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:15:15] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:15:17] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:15:17] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:15:28] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:15:28] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:15:38] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:15:38] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:15:48] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:15:48] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:15:58] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:15:58] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:16:08] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:16:08] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:16:18] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:16:18] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:16:38] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:16:38] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:16:49] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:16:49] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:16:58] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:16:58] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:16:59] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:16:59] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:17:04] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:17:04] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:17:13] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:17:13] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:17:24] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:17:24] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:17:28] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:17:28] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:17:30] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:17:30] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:17:32] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 2
+    [since] => 2025-05-20 12:14:03
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:17:32] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:20:19] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:20:19] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:20:22] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:20:23] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:20:33] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:20:33] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:20:43] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:20:43] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:20:53] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:20:53] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:20:56] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:20:56] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:21:06] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:21:06] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:21:16] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:21:16] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:21:26] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:21:26] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:21:36] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:21:36] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:21:46] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:21:46] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:21:56] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:21:56] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:22:41] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:22:41] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:22:43] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:22:43] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:22:47] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:22:47] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:22:51] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:22:51] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:23:02] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:23:02] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:23:12] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:23:12] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:23:22] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:23:22] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:23:32] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:23:32] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:23:42] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:23:42] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:23:52] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:23:52] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:23:59] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:23:59] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:24:05] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:24:05] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:24:08] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:24:08] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:24:13] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:24:13] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:24:14] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:24:14] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:24:16] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:24:16] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:24:23] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:24:23] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:24:33] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:24:33] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:24:43] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:24:43] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:24:53] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:24:53] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:25:03] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:25:03] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:25:13] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:25:13] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:25:23] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:25:23] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:25:40] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:25:40] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:26:43] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:26:43] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:27:41] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:27:41] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:28:41] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:28:41] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:29:41] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:29:41] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:30:41] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:30:41] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:30:43] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:30:43] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:30:45] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:30:45] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:30:56] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:30:56] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:31:06] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:31:06] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:31:16] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:31:16] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:31:26] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:31:26] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:31:36] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:31:36] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:31:46] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:31:46] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:32:41] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:32:41] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:33:42] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:33:42] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:34:41] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:34:41] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:35:41] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:35:41] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:36:42] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:36:42] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:37:39] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:37:39] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 2
+)
+
+[2025-05-20 12:37:40] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:37:40] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 2
+)
+
+[2025-05-20 12:37:42] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:20:22
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:37:42] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 2
+)
+
+[2025-05-20 12:37:45] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 11
+    [since] => 2025-05-20 12:37:51
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:37:45] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 2
+)
+
+[2025-05-20 12:37:49] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 12
+    [since] => 2025-05-20 19:37:00
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:37:49] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:37:51] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 12
+    [since] => 2025-05-20 19:37:00
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:37:51] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:37:53] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 12
+    [since] => 2025-05-20 19:37:00
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:37:53] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:37:55] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 12
+    [since] => 2025-05-20 19:37:00
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:37:55] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:37:57] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 12
+    [since] => 2025-05-20 19:37:00
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:37:57] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:37:58] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 12
+    [since] => 2025-05-20 19:37:00
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:37:58] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:37:59] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 12
+    [since] => 2025-05-20 19:37:00
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:37:59] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:38:02] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 12
+    [since] => 2025-05-20 19:37:00
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:38:02] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:38:03] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 12
+    [since] => 2025-05-20 19:37:00
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:38:03] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:38:05] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 12
+    [since] => 2025-05-20 19:37:00
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:38:05] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:38:06] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 12
+    [since] => 2025-05-20 19:37:00
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:38:06] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:38:16] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 12
+    [since] => 2025-05-20 19:37:00
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:38:16] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:38:22] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 12
+    [since] => 2025-05-20 19:37:00
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:38:22] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:38:24] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 12
+    [since] => 2025-05-20 19:37:00
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:38:24] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
+[2025-05-20 12:38:26] Check messages request: Array
+(
+    [user_id] => 1
+    [visitor_id] => 12
+    [since] => 2025-05-20 19:37:00
+    [widget_id] => 450a6c5bead35a8c3648a923a33da5a5
+)
+
+[2025-05-20 12:38:26] Returning messages: Array
+(
+    [count] => 0
+    [unread_count] => 0
+)
+
