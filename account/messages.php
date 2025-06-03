@@ -13,6 +13,13 @@ $user = getUserById($userId);
 // Get widget_id for this user
 $widgetId = isset($user['widget_id']) ? $user['widget_id'] : null;
 
+// Check subscription status and get limits
+$canUpload = canUploadFiles($userId);
+$subscription = null;
+if ($user['subscription_id']) {
+    $subscription = getSubscriptionById($user['subscription_id']);
+}
+
 // Check if widget_id column exists in messages table
 $hasWidgetIdColumn = false;
 try {
@@ -53,11 +60,7 @@ if ($visitorId) {
     // Store widget_id in session for use in other files
     $_SESSION['current_visitor_widget_id'] = $visitorWidgetId;
     
-    // Log for debugging
-    error_log("Viewing messages for visitor {$visitorId} with widget_id: " . ($visitorWidgetId ?? 'unknown'));
-    
     // Mark messages as read if viewing a specific conversation
-    // Include widget_id in the filter if the column exists and we have a widget_id
     if ($hasWidgetIdColumn && $visitorWidgetId) {
         $db->query(
             "UPDATE messages SET `read` = 1 
@@ -74,7 +77,6 @@ if ($visitorId) {
 }
 
 // Build the base query for visitors with message count
-// Include widget_id filter if the column exists
 $baseVisitorsQuery = "SELECT v.*, 
                      (SELECT COUNT(*) FROM messages m WHERE m.visitor_id = v.id AND m.user_id = :user_id";
                      
@@ -96,7 +98,14 @@ if ($hasWidgetIdColumn && $widgetId) {
     $baseVisitorsQuery .= " AND m.widget_id = :widget_id";
 }
 
-$baseVisitorsQuery .= ") as last_message_date
+$baseVisitorsQuery .= ") as last_message_date,
+                     (SELECT message FROM messages m WHERE m.visitor_id = v.id AND m.user_id = :user_id";
+
+if ($hasWidgetIdColumn && $widgetId) {
+    $baseVisitorsQuery .= " AND m.widget_id = :widget_id";
+}
+
+$baseVisitorsQuery .= " ORDER BY created_at DESC LIMIT 1) as last_message
                      FROM visitors v 
                      WHERE v.user_id = :user_id";
                  
@@ -121,7 +130,6 @@ $visitorsQuery = $baseVisitorsQuery . " LIMIT " . intval($limit) . " OFFSET " . 
 // Prepare parameters
 $queryParams = ['user_id' => $userId];
 
-// Include widget_id in params if the column exists
 if ($hasWidgetIdColumn && $widgetId) {
     $queryParams['widget_id'] = $widgetId;
 }
@@ -134,12 +142,7 @@ if (!empty($searchTerm)) {
 try {
     $visitors = $db->fetchAll($visitorsQuery, $queryParams);
 } catch (Exception $e) {
-    // Log the error for debugging
     error_log("Visitors query error: " . $e->getMessage());
-    error_log("Query: " . $visitorsQuery);
-    error_log("Params: " . print_r($queryParams, true));
-    
-    // Set visitors to empty array to prevent further errors
     $visitors = [];
 }
 
@@ -159,12 +162,6 @@ if (!empty($searchTerm)) {
 try {
     $totalCount = $db->fetch($countQuery, $countParams)['total'];
 } catch (Exception $e) {
-    // Log the error for debugging
-    error_log("Count query error: " . $e->getMessage());
-    error_log("Query: " . $countQuery);
-    error_log("Params: " . print_r($countParams, true));
-    
-    // Set default value
     $totalCount = 0;
 }
 
@@ -188,7 +185,6 @@ if ($visitorId) {
     // Get messages for this conversation
     if ($visitorInfo) {
         try {
-            // Include widget_id in the filter if the column exists and we have a widget_id
             if ($hasWidgetIdColumn && $visitorWidgetId) {
                 $messages = $db->fetchAll(
                     "SELECT * FROM messages 
@@ -213,30 +209,100 @@ if ($visitorId) {
 // Process message sending if form was submitted
 $messageSent = false;
 $messageError = null;
+$fileUploaded = false;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['message']) && $visitorId) {
     $messageContent = trim($_POST['message']);
+    $hasFiles = !empty($_FILES['files']['tmp_name'][0]);
     
-    if (!empty($messageContent)) {
+    // Validate subscription for sending messages
+    if (!canSendMessage($userId, $visitorWidgetId)) {
+        $messageError = "Message limit reached for your subscription plan.";
+    } 
+    // Check file upload permissions
+    elseif ($hasFiles && !$canUpload) {
+        $messageError = "File uploads are not allowed on your current subscription plan.";
+    }
+    // Ensure either message or file is provided
+    elseif (empty($messageContent) && !$hasFiles) {
+        $messageError = "Message or file is required.";
+    } else {
         try {
-            // Prepare message data
-            $messageData = [
-                'user_id' => $userId,
-                'visitor_id' => $visitorId,
-                'message' => $messageContent,
-                'sender_type' => 'agent',
-                'read' => 0 // Not read by default
-            ];
-            
-            // Include widget_id if available - either from session or from the query
-            if (isset($_SESSION['current_visitor_widget_id']) && $_SESSION['current_visitor_widget_id']) {
-                $messageData['widget_id'] = $_SESSION['current_visitor_widget_id'];
-            } elseif ($visitorWidgetId) {
-                $messageData['widget_id'] = $visitorWidgetId;
+            // Handle file uploads first
+            $uploadedFiles = [];
+            if ($hasFiles && $canUpload) {
+                $uploadDir = '../uploads/messages';
+                if (!file_exists($uploadDir)) {
+                    mkdir($uploadDir, 0755, true);
+                }
+                
+                foreach ($_FILES['files']['tmp_name'] as $index => $tmpName) {
+                    if (!empty($tmpName)) {
+                        $file = [
+                            'name' => $_FILES['files']['name'][$index],
+                            'type' => $_FILES['files']['type'][$index],
+                            'tmp_name' => $tmpName,
+                            'size' => $_FILES['files']['size'][$index],
+                            'error' => $_FILES['files']['error'][$index]
+                        ];
+                        
+                        $uploadResult = uploadFile($file, $uploadDir);
+                        if ($uploadResult['success']) {
+                            $uploadedFiles[] = $uploadResult;
+                        } else {
+                            throw new Exception($uploadResult['message']);
+                        }
+                    }
+                }
             }
             
-            // Insert message using the db->insert method
-            $messageId = $db->insert('messages', $messageData);
+            // Send text message if provided
+            if (!empty($messageContent)) {
+                // Prepare message data
+                $messageData = [
+                    'user_id' => $userId,
+                    'visitor_id' => $visitorId,
+                    'message' => $messageContent,
+                    'sender_type' => 'agent',
+                    'read' => 0
+                ];
+                
+                // Include widget_id if available
+                if (isset($_SESSION['current_visitor_widget_id']) && $_SESSION['current_visitor_widget_id']) {
+                    $messageData['widget_id'] = $_SESSION['current_visitor_widget_id'];
+                } elseif ($visitorWidgetId) {
+                    $messageData['widget_id'] = $visitorWidgetId;
+                }
+                
+                // Insert message using the db->insert method
+                $messageId = $db->insert('messages', $messageData);
+                $messageSent = true;
+            }
+            
+            // Send file messages
+            foreach ($uploadedFiles as $file) {
+                $messageData = [
+                    'user_id' => $userId,
+                    'visitor_id' => $visitorId,
+                    'message' => 'File: ' . $file['original_name'],
+                    'sender_type' => 'agent',
+                    'read' => 0,
+                    'file_path' => $file['filename'],
+                    'file_name' => $file['original_name'],
+                    'file_size' => formatFileSize($file['size']),
+                    'file_type' => $file['type']
+                ];
+                
+                // Include widget_id if available
+                if (isset($_SESSION['current_visitor_widget_id']) && $_SESSION['current_visitor_widget_id']) {
+                    $messageData['widget_id'] = $_SESSION['current_visitor_widget_id'];
+                } elseif ($visitorWidgetId) {
+                    $messageData['widget_id'] = $visitorWidgetId;
+                }
+                
+                $db->insert('messages', $messageData);
+                $fileUploaded = true;
+            }
             
             // Update visitor's last activity
             $db->query(
@@ -244,9 +310,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['message']) && $visito
                 [$visitorId]
             );
             
-            $messageSent = true;
-            
-            // Get the updated conversation with the same widget_id filter
+            // Reload messages
             if ($hasWidgetIdColumn && $visitorWidgetId) {
                 $messages = $db->fetchAll(
                     "SELECT * FROM messages 
@@ -265,17 +329,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['message']) && $visito
             
         } catch (Exception $e) {
             $messageError = "Failed to send message. Please try again.";
-            // Log the actual error for debugging
             error_log("Message sending error: " . $e->getMessage());
         }
-    } else {
-        $messageError = "Message cannot be empty.";
     }
 }
 
 // Get message counts for header stats
 try {
-    // Include widget_id in the count queries if the column exists
     if ($hasWidgetIdColumn && $widgetId) {
         $totalMessages = $db->fetch(
             "SELECT COUNT(*) as count FROM messages WHERE user_id = :user_id AND widget_id = :widget_id", 
@@ -289,7 +349,6 @@ try {
     }
     $totalMessagesCount = isset($totalMessages['count']) ? $totalMessages['count'] : 0;
 } catch (Exception $e) {
-    error_log("Total messages count error: " . $e->getMessage());
     $totalMessagesCount = 0;
 }
 
@@ -307,1326 +366,1850 @@ try {
     }
     $unreadMessagesCount = isset($unreadCount['count']) ? $unreadCount['count'] : 0;
 } catch (Exception $e) {
-    error_log("Unread messages count error: " . $e->getMessage());
     $unreadMessagesCount = 0;
 }
+
+// Get current usage stats for subscription
+$currentVisitors = getVisitorCount($userId);
+$currentMessages = getMessageCount($userId);
 
 // Include header
 include '../includes/header.php';
 ?>
 
-<style>
-/* Messages Page Styles */
-.messages-container {
-    max-width: 1400px;
-    padding: 0;
-    height: calc(100vh - 80px);
-    margin: 0 auto;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-
-.page-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 15px 20px;
-    background-color: #fff;
-    border-bottom: 1px solid #e6e9f0;
-}
-
-.page-header h1 {
-    margin: 0;
-    font-size: 1.5rem;
-    color: #333;
-}
-
-.total-stats {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-}
-
-.stat-item {
-    display: flex;
-    align-items: center;
-    color: #555;
-}
-
-.stat-item .count {
-    font-weight: 700;
-    font-size: 1.1rem;
-    color: #333;
-    margin-right: 5px;
-}
-
-.stat-item .label {
-    font-size: 0.85rem;
-}
-
-.stat-item .id {
-    font-family: monospace;
-    background: #f8f9fa;
-    padding: 2px 6px;
-    border-radius: 3px;
-    margin-left: 5px;
-    font-size: 0.85rem;
-}
-
-.messages-layout {
-    display: flex;
-    height: 100%;
-    overflow: hidden;
-}
-
-/* Sidebar Styles */
-.conversations-sidebar {
-    width: 340px;
-    border-right: 1px solid #e6e9f0;
-    display: flex;
-    flex-direction: column;
-    background-color: #f8f9fa;
-    overflow: hidden;
-}
-
-.sidebar-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 15px;
-    border-bottom: 1px solid #e6e9f0;
-}
-
-.sidebar-header h2 {
-    margin: 0;
-    font-size: 1.1rem;
-    color: #333;
-}
-
-.btn-back {
-    font-size: 0.85rem;
-    color: #3498db;
-    text-decoration: none;
-}
-
-.btn-back:hover {
-    text-decoration: underline;
-}
-
-.conversation-filters {
-    padding: 15px;
-    border-bottom: 1px solid #e6e9f0;
-}
-
-.search-form {
-    margin-bottom: 12px;
-}
-
-.search-input-container {
-    position: relative;
-}
-
-.search-input {
-    width: 100%;
-    padding: 10px 35px 10px 12px;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    font-size: 0.9rem;
-    outline: none;
-    transition: border-color 0.3s;
-}
-
-.search-input:focus {
-    border-color: #3498db;
-    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
-}
-
-.search-btn {
-    position: absolute;
-    right: 8px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: none;
-    border: none;
-    color: #888;
-    cursor: pointer;
-    padding: 5px;
-}
-
-.clear-search {
-    position: absolute;
-    right: 32px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #888;
-    cursor: pointer;
-    padding: 5px;
-    text-decoration: none;
-}
-
-.filter-tabs {
-    display: flex;
-    gap: 2px;
-}
-
-.filter-tab {
-    flex: 1;
-    padding: 8px 12px;
-    text-align: center;
-    border-radius: 6px;
-    font-size: 0.85rem;
-    color: #555;
-    text-decoration: none;
-    transition: all 0.2s ease;
-    background-color: #eef1f5;
-}
-
-.filter-tab:hover {
-    background-color: #e0e5eb;
-}
-
-.filter-tab.active {
-    background-color: #3498db;
-    color: white;
-}
-
-.conversation-list {
-    flex: 1;
-    overflow-y: auto;
-    padding: 10px;
-}
-
-.conversation-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px;
-    border-radius: 10px;
-    text-decoration: none;
-    margin-bottom: 8px;
-    transition: all 0.2s ease;
-    background-color: #fff;
-    border: 1px solid transparent;
-}
-
-.conversation-item:hover {
-    background-color: #f0f4f8;
-}
-
-.conversation-item.active {
-    border-color: #3498db;
-    background-color: #ebf5fb;
-}
-
-.conversation-item.unread {
-    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-    border-left: 4px solid #3498db;
-}
-
-.conversation-avatar {
-    width: 45px;
-    height: 45px;
-    border-radius: 50%;
-    background-color: #3498db;
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.2rem;
-    font-weight: 600;
-    flex-shrink: 0;
-}
-
-.conversation-content {
-    flex: 1;
-    min-width: 0;
-}
-
-.conversation-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 4px;
-}
-
-.visitor-name {
-    color: #333;
-    font-weight: 600;
-    font-size: 0.95rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 140px;
-}
-
-.last-message-time {
-    color: #888;
-    font-size: 0.75rem;
-}
-
-.conversation-meta {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.visitor-email, .visitor-url {
-    color: #777;
-    font-size: 0.8rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 170px;
-}
-
-.unread-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 20px;
-    height: 20px;
-    border-radius: 10px;
-    background-color: #3498db;
-    color: white;
-    font-size: 0.75rem;
-    font-weight: 600;
-    padding: 0 6px;
-}
-
-.sidebar-pagination {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px;
-    border-top: 1px solid #e6e9f0;
-    background-color: #fff;
-}
-
-.pagination-button {
-    color: #3498db;
-    text-decoration: none;
-    font-size: 0.85rem;
-    padding: 5px 8px;
-    border-radius: 4px;
-    transition: background-color 0.2s;
-}
-
-.pagination-button:hover {
-    background-color: #ebf5fb;
-}
-
-.pagination-info {
-    color: #777;
-    font-size: 0.8rem;
-}
-
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 40px 20px;
-    color: #888;
-}
-
-.empty-icon {
-    font-size: 3rem;
-    margin-bottom: 20px;
-    color: #ccc;
-}
-
-.empty-state p {
-    font-size: 0.95rem;
-    margin-bottom: 15px;
-}
-
-.btn-outline {
-    display: inline-block;
-    padding: 8px 16px;
-    border: 1px solid #3498db;
-    border-radius: 6px;
-    color: #3498db;
-    text-decoration: none;
-    font-size: 0.85rem;
-    transition: all 0.2s;
-}
-
-.btn-outline:hover {
-    background-color: #3498db;
-    color: white;
-}
-
-/* Messages Content Styles */
-.messages-content {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    background-color: #fff;
-    overflow: hidden;
-}
-
-.chat-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 15px 20px;
-    border-bottom: 1px solid #e6e9f0;
-    background-color: #fff;
-}
-
-.visitor-info {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-.visitor-avatar {
-    width: 45px;
-    height: 45px;
-    border-radius: 50%;
-    background-color: #3498db;
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.2rem;
-    font-weight: 600;
-}
-
-.visitor-details h3 {
-    margin: 0 0 5px;
-    font-size: 1.1rem;
-    color: #333;
-}
-
-.visitor-email {
-    font-size: 0.85rem;
-    color: #666;
-}
-
-.visitor-widget-id {
-    font-size: 0.8rem;
-    color: #888;
-    margin-top: 2px;
-}
-
-.visitor-meta {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-}
-
-.meta-item {
-    display: flex;
-    align-items: center;
-    color: #666;
-    font-size: 0.85rem;
-}
-
-.meta-item i {
-    margin-right: 5px;
-    color: #3498db;
-}
-
-.meta-item a {
-    color: #3498db;
-    text-decoration: none;
-}
-
-.meta-item a:hover {
-    text-decoration: underline;
-}
-
-.visitor-actions {
-    margin-left: 10px;
-}
-
-.btn {
-    display: inline-block;
-    padding: 8px 16px;
-    border-radius: 6px;
-    font-size: 0.9rem;
-    text-decoration: none;
-    transition: all 0.2s;
-    border: none;
-    cursor: pointer;
-}
-
-.btn-sm {
-    padding: 5px 10px;
-    font-size: 0.8rem;
-}
-
-.btn-primary {
-    background-color: #3498db;
-    color: white;
-}
-
-.btn-primary:hover {
-    background-color: #2980b9;
-}
-
-.btn-outline {
-    border: 1px solid #3498db;
-    color: #3498db;
-    background-color: transparent;
-}
-
-.btn-outline:hover {
-    background-color: #ebf5fb;
-}
-
-.btn-icon {
-    padding: 8px;
-    border-radius: 6px;
-    color: #666;
-    background-color: #f0f4f8;
-}
-
-.btn-icon:hover {
-    background-color: #e0e5eb;
-}
-
-.chat-messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 20px;
-    background-color: #f8f9fa;
-    background-image: 
-        radial-gradient(circle at 25px 25px, rgba(0,0,0,0.1) 2%, transparent 0%), 
-        radial-gradient(circle at 75px 75px, rgba(0,0,0,0.05) 2%, transparent 0%);
-    background-size: 100px 100px;
-}
-
-.messages-date-divider {
-    display: flex;
-    align-items: center;
-    margin: 20px 0;
-    color: #888;
-    font-size: 0.8rem;
-}
-
-.messages-date-divider::before,
-.messages-date-divider::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background-color: #ddd;
-}
-
-.messages-date-divider span {
-    padding: 0 15px;
-}
-
-.message {
-    display: flex;
-    margin-bottom: 15px;
-    max-width: 80%;
-}
-
-.message.visitor {
-    align-self: flex-start;
-}
-
-.message.agent {
-    align-self: flex-end;
-    flex-direction: row-reverse;
-    margin-left: auto;
-}
-
-.message-avatar {
-    width: 38px;
-    height: 38px;
-    border-radius: 50%;
-    background-color: #9b59b6;
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1rem;
-    font-weight: 600;
-    margin-right: 10px;
-}
-
-.message.agent .message-avatar {
-    margin-right: 0;
-    margin-left: 10px;
-}
-
-.message-bubble {
-    position: relative;
-    padding: 12px 16px;
-    border-radius: 18px;
-    max-width: calc(100% - 50px);
-}
-
-.message.visitor .message-bubble {
-    background-color: white;
-    border-bottom-left-radius: 4px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-
-.message.agent .message-bubble {
-    background-color: #3498db;
-    color: white;
-    border-bottom-right-radius: 4px;
-}
-
-.message-content {
-    font-size: 0.95rem;
-    line-height: 1.4;
-    word-wrap: break-word;
-    white-space: pre-wrap;
-}
-
-.message-time {
-    font-size: 0.7rem;
-    opacity: 0.8;
-    margin-top: 5px;
-    text-align: right;
-}
-
-.read-status {
-    margin-left: 5px;
-}
-
-.chat-input-container {
-    padding: 15px 20px;
-    border-top: 1px solid #e6e9f0;
-    background-color: #fff;
-}
-
-.message-status {
-    padding: 10px;
-    border-radius: 4px;
-    margin-bottom: 10px;
-    font-size: 0.9rem;
-    display: flex;
-    align-items: center;
-    transition: opacity 0.3s;
-}
-
-.message-status i {
-    margin-right: 5px;
-}
-
-.message-status.success {
-    background-color: #e8f8f5;
-    color: #27ae60;
-}
-
-.message-status.error {
-    background-color: #faeae7;
-    color: #e74c3c;
-}
-
-.chat-form {
-    display: flex;
-    flex-direction: column;
-}
-
-.chat-input {
-    width: 100%;
-    padding: 12px 15px;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    font-size: 0.95rem;
-    line-height: 1.4;
-    resize: none;
-    height: 24px;
-    max-height: 150px;
-    outline: none;
-    margin-bottom: 10px;
-    transition: border-color 0.3s;
-}
-
-.chat-input:focus {
-    border-color: #3498db;
-    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
-}
-
-.chat-actions {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.send-btn {
-    padding: 10px 20px;
-}
-
-.widget-info {
-    margin-top: 10px;
-    font-size: 0.8rem;
-    color: #888;
-    text-align: center;
-}
-
-.empty-chat {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    text-align: center;
-    color: #888;
-    padding: 20px;
-}
-
-.empty-chat-icon {
-    font-size: 4rem;
-    margin-bottom: 20px;
-    color: #ddd;
-}
-
-.empty-chat h3 {
-    font-size: 1.5rem;
-    margin-bottom: 10px;
-    color: #666;
-}
-
-.empty-chat p {
-    font-size: 1rem;
-    max-width: 300px;
-}
-
-/* Responsive Styles */
-@media (max-width: 992px) {
-    .messages-container {
-        height: calc(100vh - 70px);
-    }
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?php echo $pageTitle; ?></title>
     
-    .messages-layout {
-        flex-direction: column;
-    }
-    
-    .conversations-sidebar {
-        width: 100%;
-        height: 100%;
-        display: <?php echo $visitorId ? 'none' : 'flex'; ?>;
-        z-index: 5;
-    }
-    
-    .messages-content {
-        display: <?php echo $visitorId ? 'flex' : 'none'; ?>;
-        height: 100%;
-    }
-    
-    .chat-header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    
-    .visitor-meta {
-        margin-top: 10px;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 5px;
-    }
-    
-    .visitor-actions {
-        margin-top: 10px;
-        margin-left: 0;
-    }
-    
-    .message {
-        max-width: 90%;
-    }
-}
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <style>
+        :root {
+            --primary-color: #5e72e4;
+            --primary-light: #8b98ff;
+            --primary-dark: #4c63d2;
+            --secondary-color: #8392ab;
+            --success-color: #2dce89;
+            --danger-color: #f5365c;
+            --warning-color: #fb6340;
+            --info-color: #11cdef;
+            --light-color: #f8f9fe;
+            --dark-color: #32325d;
+            --white: #ffffff;
+            --gray-100: #f6f9fc;
+            --gray-200: #e9ecef;
+            --gray-300: #dee2e6;
+            --gray-400: #cbd5e0;
+            --gray-500: #adb5bd;
+            --gray-600: #8898aa;
+            --gray-700: #525f7f;
+            --gray-800: #32325d;
+            --gray-900: #212529;
+            --message-sent: #5e72e4;
+            --message-sent-text: #ffffff;
+            --message-received: #f6f9fc;
+            --message-received-text: #525f7f;
+            --sidebar-bg: #ffffff;
+            --border-color: #e9ecef;
+            --shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            --shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+            --shadow-lg: 0 1rem 3rem rgba(0, 0, 0, 0.175);
+            --border-radius: 0.375rem;
+            --border-radius-lg: 0.5rem;
+            --border-radius-xl: 1rem;
+            --font-family-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
 
-@media (max-width: 576px) {
-    .page-header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    
-    .total-stats {
-        margin-top: 10px;
-        flex-wrap: wrap;
-    }
-    
-    .message-bubble {
-        max-width: calc(100% - 40px);
-    }
-    
-    .filter-tabs {
-        overflow-x: auto;
-        padding-bottom: 5px;
-    }
-    
-    .filter-tab {
-        flex: 0 0 auto;
-        min-width: 80px;
-    }
-    
-    .chat-input {
-        padding: 10px;
-    }
-    
-    .btn {
-        padding: 8px 12px;
-    }
-}
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-/* Animation Effects */
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
+        body {
+            font-family: var(--font-family-sans);
+            background-color: var(--gray-100);
+            color: var(--gray-800);
+            font-size: 0.9rem;
+            line-height: 1.6;
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
 
-.message {
-    animation: fadeIn 0.3s ease-out;
-}
+        .messages-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: var(--white);
+        }
 
-.status-badge {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    margin-right: 5px;
-}
+        /* Header */
+        .messages-header {
+            background: var(--white);
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+            z-index: 1000;
+        }
 
-.status-badge.online {
-    background-color: #2ecc71;
-}
+        .messages-header .navbar {
+            padding: 1rem 1.5rem;
+        }
 
-.status-badge.offline {
-    background-color: #e74c3c;
-}
+        .messages-header .navbar-brand {
+            font-weight: 700;
+            font-size: 1.25rem;
+            color: var(--dark-color);
+            letter-spacing: -0.025em;
+        }
 
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-    .conversations-sidebar {
-        background-color: #1e1e2d;
-        border-color: #2d2d42;
-    }
-    
-    .conversation-item {
-        background-color: #262636;
-    }
-    
-    .conversation-item:hover {
-        background-color: #2c2c40;
-    }
-    
-    .conversation-item.active {
-        background-color: #2f367d;
-        border-color: #4a5fc1;
-    }
-    
-    .sidebar-header, .conversation-filters, .sidebar-pagination, .page-header, .chat-header, .chat-input-container {
-        background-color: #1e1e2d;
-        border-color: #2d2d42;
-    }
-    
-    .chat-messages {
-        background-color: #262636;
-    }
-    
-    .filter-tab {
-        background-color: #2d2d42;
-        color: #a9b7d0;
-    }
-    
-    .filter-tab:hover {
-        background-color: #32324a;
-    }
-    
-    .filter-tab.active {
-        background-color: #3a57e8;
-    }
-    
-    .message.visitor .message-bubble {
-        background-color: #2d2d42;
-        color: #e2e5ec;
-    }
-    
-    .chat-input {
-        background-color: #262636;
-        border-color: #2d2d42;
-        color: #e2e5ec;
-    }
-    
-    h1, h2, h3, .visitor-name {
-        color: #e2e5ec;
-    }
-    
-    .visitor-email, .meta-item, .last-message-time {
-        color: #a9b7d0;
-    }
-    
-    .search-input {
-        background-color: #262636;
-        border-color: #2d2d42;
-        color: #e2e5ec;
-    }
-    
-    .empty-chat, .empty-state {
-        color: #a9b7d0;
-    }
-    
-    .empty-chat-icon, .empty-icon {
-        color: #32324a;
-    }
-    
-    .messages-date-divider {
-        color: #a9b7d0;
-    }
-    
-    .messages-date-divider::before, .messages-date-divider::after {
-        background-color: #32324a;
-    }
-}
+        .messages-header .navbar-brand i {
+            color: var(--primary-color);
+        }
 
-/* Custom Scrollbar */
-::-webkit-scrollbar {
-    width: 8px;
-}
+        .stats-badge {
+            background: var(--gray-100);
+            color: var(--gray-700);
+            padding: 0.375rem 0.875rem;
+            border-radius: var(--border-radius-xl);
+            font-size: 0.813rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+            border: 1px solid var(--gray-200);
+            letter-spacing: 0.025em;
+        }
 
-::-webkit-scrollbar-track {
-    background: rgba(0,0,0,0.05);
-}
+        .stats-badge i {
+            color: var(--primary-color);
+        }
 
-::-webkit-scrollbar-thumb {
-    background: rgba(0,0,0,0.2);
-    border-radius: 4px;
-}
+        .stats-badge.warning {
+            background: rgba(251, 99, 64, 0.1);
+            color: var(--warning-color);
+            border-color: var(--warning-color);
+        }
 
-::-webkit-scrollbar-thumb:hover {
-    background: rgba(0,0,0,0.3);
-}
-</style>
+        .stats-badge.danger {
+            background: rgba(245, 54, 92, 0.1);
+            color: var(--danger-color);
+            border-color: var(--danger-color);
+        }
 
-<main class="messages-container">
-    <div class="page-header">
-        <h1>Messages</h1>
-        <div class="total-stats">
-            <div class="stat-item">
-                <span class="count"><?php echo $totalMessagesCount; ?></span>
-                <span class="label">Total Messages</span>
-            </div>
-            <div class="stat-item">
-                <span class="count"><?php echo $unreadMessagesCount; ?></span>
-                <span class="label">Unread</span>
-            </div>
-            <!-- Add Widget ID information if available -->
-            <?php if ($visitorWidgetId): ?>
-            <div class="stat-item">
-                <span class="label">Current Widget:</span>
-                <span class="id"><?php echo htmlspecialchars($visitorWidgetId); ?></span>
-            </div>
-            <?php elseif ($widgetId): ?>
-            <div class="stat-item">
-                <span class="label">Your Widget:</span>
-                <span class="id"><?php echo htmlspecialchars($widgetId); ?></span>
-            </div>
-            <?php endif; ?>
-        </div>
-    </div>
+        .widget-info {
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            font-size: 0.75rem;
+            color: var(--gray-500);
+            background: var(--gray-100);
+            padding: 0.25rem 0.75rem;
+            border-radius: var(--border-radius);
+            border: 1px solid var(--gray-200);
+        }
 
-    <div class="messages-layout">
-        <!-- Left sidebar: Conversation list -->
-        <div class="conversations-sidebar">
-            <div class="sidebar-header">
-                <h2>Conversations</h2>
-                <?php if ($visitorId): ?>
-                <a href="messages.php" class="btn btn-sm btn-back">
-                    <i class="fas fa-arrow-left"></i> Back to List
-                </a>
-                <?php endif; ?>
-            </div>
-            
-            <div class="conversation-filters">
-                <form method="get" class="search-form">
-                    <div class="search-input-container">
-                        <input type="text" name="search" placeholder="Search visitors..." value="<?php echo htmlspecialchars($searchTerm); ?>" class="search-input">
-                        <button type="submit" class="search-btn">
-                            <i class="fas fa-search"></i>
+        /* Main Layout */
+        .messages-layout {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            background: var(--gray-100);
+        }
+
+        /* Sidebar */
+        .conversations-sidebar {
+            width: 380px;
+            background: var(--white);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            box-shadow: 4px 0 6px -1px rgba(0, 0, 0, 0.07);
+        }
+
+        .sidebar-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--white);
+        }
+
+        .sidebar-title {
+            font-size: 1.125rem;
+            font-weight: 700;
+            color: var(--dark-color);
+            margin: 0;
+            letter-spacing: -0.025em;
+        }
+
+        .sidebar-title i {
+            color: var(--primary-color);
+        }
+
+        .search-container {
+            padding: 1rem 1.5rem;
+            background: var(--gray-50);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .search-input {
+            border-radius: var(--border-radius-xl);
+            border: 2px solid transparent;
+            padding: 0.625rem 1rem 0.625rem 2.75rem;
+            background-color: var(--gray-100);
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+        }
+
+        .search-input:focus {
+            background-color: var(--white);
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(94, 114, 228, 0.1);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 1.125rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--gray-500);
+        }
+
+        .filter-tabs {
+            background: var(--white);
+            padding: 0.75rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .filter-tab {
+            border: 2px solid transparent;
+            background: var(--gray-100);
+            padding: 0.5rem 1.25rem;
+            border-radius: var(--border-radius-xl);
+            transition: all 0.2s ease;
+            font-size: 0.813rem;
+            font-weight: 600;
+            color: var(--gray-600);
+        }
+
+        .filter-tab.active {
+            background: var(--primary-color);
+            color: white;
+            box-shadow: 0 4px 6px -1px rgba(94, 114, 228, 0.25);
+        }
+
+        .filter-tab:hover:not(.active) {
+            background: var(--white);
+            color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
+        /* Conversations List */
+        .conversations-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.75rem;
+        }
+
+        .conversation-item {
+            display: flex;
+            align-items: center;
+            padding: 1.125rem;
+            border-radius: var(--border-radius-lg);
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 2px solid transparent;
+            text-decoration: none;
+            color: inherit;
+            background: var(--white);
+        }
+
+        .conversation-item:hover {
+            background: var(--gray-50);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
+        }
+
+        .conversation-item.active {
+            background: linear-gradient(135deg, rgba(94, 114, 228, 0.1) 0%, rgba(94, 114, 228, 0.05) 100%);
+            border-color: var(--primary-color);
+            box-shadow: 0 4px 6px -1px rgba(94, 114, 228, 0.15);
+        }
+
+        .conversation-item.unread {
+            background: linear-gradient(135deg, rgba(94, 114, 228, 0.05) 0%, rgba(139, 152, 255, 0.05) 100%);
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .conversation-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: var(--border-radius-lg);
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 1.125rem;
+            margin-right: 1rem;
+            position: relative;
+            box-shadow: 0 4px 6px -1px rgba(94, 114, 228, 0.25);
+        }
+
+        .online-indicator {
+            position: absolute;
+            bottom: -2px;
+            right: -2px;
+            width: 14px;
+            height: 14px;
+            background: var(--success-color);
+            border: 3px solid white;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(45, 206, 137, 0.25);
+        }
+
+        .conversation-details {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .conversation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.25rem;
+        }
+
+        .visitor-name {
+            font-weight: 700;
+            font-size: 0.9375rem;
+            color: var(--gray-900);
+            margin: 0;
+            letter-spacing: -0.025em;
+        }
+
+        .message-time {
+            font-size: 0.75rem;
+            color: var(--gray-500);
+            font-weight: 500;
+        }
+
+        .last-message {
+            font-size: 0.813rem;
+            color: var(--gray-600);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 0.25rem;
+            line-height: 1.4;
+        }
+
+        .conversation-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .visitor-email {
+            font-size: 0.75rem;
+            color: var(--gray-500);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 200px;
+        }
+
+        .unread-badge {
+            background: var(--primary-color);
+            color: white;
+            font-size: 0.688rem;
+            font-weight: 700;
+            padding: 0.125rem 0.5rem;
+            border-radius: var(--border-radius-xl);
+            min-width: 20px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(94, 114, 228, 0.25);
+        }
+
+        /* Chat Area */
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--white);
+            border-radius: var(--border-radius-lg) 0 0 var(--border-radius-lg);
+            margin-left: -1px;
+            box-shadow: -4px 0 6px -1px rgba(0, 0, 0, 0.07);
+        }
+
+        .chat-header {
+            background: var(--white);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1.25rem 1.5rem;
+            border-radius: var(--border-radius-lg) 0 0 0;
+        }
+
+        .chat-user-info {
+            display: flex;
+            align-items: center;
+        }
+
+        .chat-avatar {
+            width: 45px;
+            height: 45px;
+            border-radius: var(--border-radius-lg);
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 1.125rem;
+            margin-right: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(94, 114, 228, 0.25);
+        }
+
+        .chat-user-details h5 {
+            margin: 0;
+            font-weight: 700;
+            color: var(--gray-900);
+            font-size: 1.0625rem;
+            letter-spacing: -0.025em;
+        }
+
+        .chat-user-status {
+            font-size: 0.813rem;
+            color: var(--gray-500);
+            margin: 0;
+            font-weight: 500;
+        }
+
+        .online-status {
+            color: var(--success-color);
+            font-weight: 600;
+        }
+
+        .offline-status {
+            color: var(--gray-500);
+        }
+
+        /* Messages Area */
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.5rem;
+            background: var(--gray-50);
+        }
+
+        .message-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .date-divider {
+            text-align: center;
+            margin: 2rem 0;
+            position: relative;
+        }
+
+        .date-divider::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            width: 100%;
+            height: 1px;
+            background: var(--gray-200);
+        }
+
+        .date-divider span {
+            background: var(--gray-50);
+            padding: 0.375rem 1rem;
+            border-radius: var(--border-radius-xl);
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--gray-500);
+            position: relative;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .message {
+            display: flex;
+            margin-bottom: 1rem;
+            max-width: 70%;
+            animation: fadeInUp 0.3s ease-out;
+        }
+
+        .message.sent {
+            margin-left: auto;
+            flex-direction: row-reverse;
+        }
+
+        .message.received {
+            margin-right: auto;
+        }
+
+        .message-content {
+            padding: 0.875rem 1.25rem;
+            border-radius: 1.25rem;
+            position: relative;
+            max-width: 100%;
+            word-wrap: break-word;
+        }
+
+        .message.sent .message-content {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+            color: var(--message-sent-text);
+            border-bottom-right-radius: 0.25rem;
+            box-shadow: 0 4px 6px -1px rgba(94, 114, 228, 0.25);
+        }
+
+        .message.received .message-content {
+            background: var(--white);
+            color: var(--message-received-text);
+            border-bottom-left-radius: 0.25rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+            border: 1px solid var(--gray-200);
+        }
+
+        .message-text {
+            margin: 0;
+            line-height: 1.5;
+            font-size: 0.9375rem;
+            font-weight: 500;
+        }
+
+        .message-time {
+            font-size: 0.688rem;
+            opacity: 0.8;
+            margin-top: 0.375rem;
+            font-weight: 500;
+        }
+
+        .message.sent .message-time {
+            text-align: right;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .message.received .message-time {
+            text-align: left;
+            color: var(--gray-500);
+        }
+
+        .message-status {
+            margin-left: 0.25rem;
+        }
+
+        /* File Message Styles */
+        .file-message {
+            background: var(--white);
+            border: 2px solid var(--gray-200);
+            border-radius: var(--border-radius-lg);
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+            color: inherit;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .file-message:hover {
+            background: var(--gray-50);
+            border-color: var(--primary-color);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .file-icon {
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--gray-100);
+            border-radius: var(--border-radius-lg);
+            margin-right: 1rem;
+            font-size: 1.5rem;
+        }
+
+        .file-details h6 {
+            margin: 0;
+            font-weight: 700;
+            color: var(--gray-900);
+            font-size: 0.875rem;
+        }
+
+        .file-size {
+            font-size: 0.75rem;
+            color: var(--gray-500);
+            font-weight: 500;
+        }
+
+        .download-btn {
+            margin-left: auto;
+            padding: 0.5rem;
+            border: none;
+            background: var(--primary-color);
+            color: white;
+            border-radius: var(--border-radius);
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(94, 114, 228, 0.25);
+        }
+
+        .download-btn:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px -1px rgba(94, 114, 228, 0.35);
+        }
+
+        /* Image Preview */
+        .image-message {
+            max-width: 300px;
+            border-radius: var(--border-radius-lg);
+            overflow: hidden;
+            cursor: pointer;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s ease;
+        }
+
+        .image-message:hover {
+            transform: scale(1.02);
+            box-shadow: 0 8px 12px -3px rgba(0, 0, 0, 0.15);
+        }
+
+        .image-message img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        /* Chat Input */
+        .chat-input-container {
+            background: var(--white);
+            border-top: 1px solid var(--border-color);
+            padding: 1.25rem 1.5rem;
+        }
+
+        .chat-input-wrapper {
+            display: flex;
+            align-items: flex-end;
+            gap: 0.75rem;
+        }
+
+        .message-input {
+            flex: 1;
+            border: 2px solid var(--gray-200);
+            border-radius: 1.25rem;
+            padding: 0.75rem 1.25rem;
+            resize: none;
+            max-height: 120px;
+            font-size: 0.9375rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            background: var(--gray-50);
+        }
+
+        .message-input:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(94, 114, 228, 0.1);
+            background: var(--white);
+        }
+
+        .input-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .file-upload-btn, .emoji-btn, .send-btn {
+            width: 42px;
+            height: 42px;
+            border: none;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 1.125rem;
+        }
+
+        .file-upload-btn, .emoji-btn {
+            background: var(--gray-100);
+            color: var(--gray-600);
+            border: 2px solid transparent;
+        }
+
+        .file-upload-btn:hover, .emoji-btn:hover {
+            background: var(--white);
+            color: var(--primary-color);
+            border-color: var(--primary-color);
+            transform: translateY(-1px);
+        }
+
+        .file-upload-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .send-btn {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+            color: white;
+            box-shadow: 0 4px 6px -1px rgba(94, 114, 228, 0.25);
+        }
+
+        .send-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 8px -2px rgba(94, 114, 228, 0.35);
+        }
+
+        .send-btn:disabled {
+            background: var(--gray-300);
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        /* File Upload Area */
+        .file-upload-area {
+            margin-top: 0.75rem;
+            padding: 1.5rem;
+            border: 2px dashed var(--gray-300);
+            border-radius: var(--border-radius-lg);
+            text-align: center;
+            transition: all 0.2s ease;
+            display: none;
+            background: var(--gray-50);
+        }
+
+        .file-upload-area.dragover {
+            border-color: var(--primary-color);
+            background: rgba(94, 114, 228, 0.05);
+        }
+
+        .file-upload-area i {
+            color: var(--primary-color);
+        }
+
+        .file-upload-area p {
+            font-weight: 600;
+            color: var(--gray-700);
+            margin: 0.5rem 0 0.25rem;
+        }
+
+        .file-upload-area small {
+            font-weight: 500;
+        }
+
+        .file-preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+
+        .file-preview-item {
+            display: flex;
+            align-items: center;
+            background: var(--gray-100);
+            padding: 0.5rem 0.875rem;
+            border-radius: var(--border-radius-xl);
+            font-size: 0.813rem;
+            font-weight: 600;
+            color: var(--gray-700);
+            border: 1px solid var(--gray-200);
+        }
+
+        .file-preview-item .remove-file {
+            margin-left: 0.75rem;
+            color: var(--danger-color);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .file-preview-item .remove-file:hover {
+            transform: scale(1.1);
+        }
+
+        /* Subscription Notice */
+        .subscription-notice {
+            background: linear-gradient(135deg, rgba(251, 99, 64, 0.1) 0%, rgba(251, 99, 64, 0.05) 100%);
+            border: 1px solid var(--warning-color);
+            border-radius: var(--border-radius-lg);
+            padding: 1rem;
+            margin-bottom: 1rem;
+            font-size: 0.875rem;
+        }
+
+        .subscription-notice.danger {
+            background: linear-gradient(135deg, rgba(245, 54, 92, 0.1) 0%, rgba(245, 54, 92, 0.05) 100%);
+            border-color: var(--danger-color);
+        }
+
+        /* Empty States */
+        .empty-state {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: var(--gray-500);
+            padding: 2rem;
+        }
+
+        .empty-state i {
+            font-size: 3.5rem;
+            margin-bottom: 1.5rem;
+            color: var(--gray-300);
+        }
+
+        .empty-state h4, .empty-state h5 {
+            margin-bottom: 0.5rem;
+            color: var(--gray-700);
+            font-weight: 700;
+            letter-spacing: -0.025em;
+        }
+
+        .empty-state p {
+            color: var(--gray-500);
+            font-weight: 500;
+            max-width: 300px;
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes bounce {
+            0%, 20%, 53%, 80%, 100% {
+                transform: translate3d(0,0,0);
+            }
+            40%, 43% {
+                transform: translate3d(0,-10px,0);
+            }
+            70% {
+                transform: translate3d(0,-5px,0);
+            }
+            90% {
+                transform: translate3d(0,-2px,0);
+            }
+        }
+
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+            padding: 0.875rem 1.25rem;
+            background: var(--white);
+            border-radius: 1.25rem;
+            margin-bottom: 1rem;
+            border-bottom-left-radius: 0.25rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+            border: 1px solid var(--gray-200);
+        }
+
+        .typing-dots {
+            display: flex;
+            gap: 0.375rem;
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            animation: bounce 1.4s infinite ease-in-out;
+        }
+
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+        /* Buttons and Controls */
+        .btn {
+            font-weight: 600;
+            letter-spacing: 0.025em;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+            border: none;
+            box-shadow: 0 4px 6px -1px rgba(94, 114, 228, 0.25);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 8px -2px rgba(94, 114, 228, 0.35);
+        }
+
+        .btn-outline-primary {
+            color: var(--primary-color);
+            border: 2px solid var(--primary-color);
+            background: transparent;
+        }
+
+        .btn-outline-primary:hover {
+            background: var(--primary-color);
+            color: white;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px -1px rgba(94, 114, 228, 0.25);
+        }
+
+        /* Alert Styling */
+        .alert {
+            border: none;
+            border-radius: var(--border-radius-lg);
+            font-weight: 500;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .alert-success {
+            background: linear-gradient(135deg, rgba(45, 206, 137, 0.1) 0%, rgba(45, 206, 137, 0.05) 100%);
+            color: var(--success-color);
+            border-left: 4px solid var(--success-color);
+        }
+
+        .alert-danger {
+            background: linear-gradient(135deg, rgba(245, 54, 92, 0.1) 0%, rgba(245, 54, 92, 0.05) 100%);
+            color: var(--danger-color);
+            border-left: 4px solid var(--danger-color);
+        }
+
+        .alert-warning {
+            background: linear-gradient(135deg, rgba(251, 99, 64, 0.1) 0%, rgba(251, 99, 64, 0.05) 100%);
+            color: var(--warning-color);
+            border-left: 4px solid var(--warning-color);
+        }
+
+        /* Modal Styling */
+        .modal-content {
+            border: none;
+            border-radius: var(--border-radius-lg);
+            box-shadow: 0 15px 35px rgba(50, 50, 93, 0.1), 0 5px 15px rgba(0, 0, 0, 0.07);
+        }
+
+        .modal-header {
+            border-bottom: 1px solid var(--gray-200);
+            padding: 1.5rem;
+        }
+
+        .modal-title {
+            font-weight: 700;
+            letter-spacing: -0.025em;
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+        }
+
+        .modal-footer {
+            border-top: 1px solid var(--gray-200);
+            padding: 1.5rem;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .conversations-sidebar {
+                width: 100%;
+                position: absolute;
+                top: 0;
+                left: 0;
+                z-index: 1000;
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+                height: 100vh;
+            }
+
+            .conversations-sidebar.show {
+                transform: translateX(0);
+            }
+
+            .chat-container {
+                width: 100%;
+                border-radius: 0;
+                margin-left: 0;
+            }
+
+            .message {
+                max-width: 85%;
+            }
+
+            .messages-header .d-flex {
+                flex-wrap: wrap;
+            }
+
+            .stats-badge {
+                margin: 0.25rem 0;
+            }
+
+            .chat-header {
+                border-radius: 0;
+            }
+        }
+
+        /* Scrollbar Styling */
+        .conversations-list::-webkit-scrollbar,
+        .chat-messages::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .conversations-list::-webkit-scrollbar-track,
+        .chat-messages::-webkit-scrollbar-track {
+            background: var(--gray-100);
+            border-radius: 4px;
+        }
+
+        .conversations-list::-webkit-scrollbar-thumb,
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: var(--gray-300);
+            border-radius: 4px;
+        }
+
+        .conversations-list::-webkit-scrollbar-thumb:hover,
+        .chat-messages::-webkit-scrollbar-thumb:hover {
+            background: var(--gray-400);
+        }
+
+        /* Focus states for accessibility */
+        *:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(94, 114, 228, 0.1);
+        }
+
+        /* Print styles */
+        @media print {
+            .messages-header,
+            .conversations-sidebar,
+            .chat-input-container,
+            .input-actions {
+                display: none;
+            }
+
+            .chat-messages {
+                background: white;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="messages-container">
+        <!-- Header -->
+        <div class="messages-header">
+            <nav class="navbar navbar-expand-lg navbar-light">
+                <div class="container-fluid">
+                    <div class="d-flex align-items-center flex-wrap w-100">
+                        <button class="btn btn-link d-md-none me-2" id="toggleSidebar">
+                            <i class="fas fa-bars"></i>
                         </button>
-                        <?php if (!empty($searchTerm)): ?>
-                        <a href="messages.php<?php echo $filter !== 'all' ? '?filter=' . htmlspecialchars($filter) : ''; ?>" class="clear-search">
-                            <i class="fas fa-times"></i>
-                        </a>
-                        <?php endif; ?>
+                        <span class="navbar-brand mb-0 h1">
+                            <i class="fas fa-comments me-2"></i>Messages
+                        </span>
+                        <div class="ms-auto d-flex align-items-center flex-wrap">
+                            <span class="stats-badge">
+                                <i class="fas fa-envelope me-1"></i><?php echo $totalMessagesCount; ?> Total
+                            </span>
+                            <span class="stats-badge">
+                                <i class="fas fa-bell me-1"></i><?php echo $unreadMessagesCount; ?> Unread
+                            </span>
+                            
+                            <?php if ($subscription): ?>
+                                <span class="stats-badge <?php 
+                                    $messagePercentage = ($currentMessages / $subscription['message_limit']) * 100;
+                                    $visitorPercentage = ($currentVisitors / $subscription['visitor_limit']) * 100;
+                                    if ($messagePercentage > 90 || $visitorPercentage > 90) echo 'danger';
+                                    elseif ($messagePercentage > 75 || $visitorPercentage > 75) echo 'warning';
+                                ?>">
+                                    <i class="fas fa-chart-bar me-1"></i>
+                                    <?php echo $currentMessages; ?>/<?php echo $subscription['message_limit']; ?> Messages
+                                </span>
+                                <span class="stats-badge <?php 
+                                    if ($visitorPercentage > 90) echo 'danger';
+                                    elseif ($visitorPercentage > 75) echo 'warning';
+                                ?>">
+                                    <i class="fas fa-users me-1"></i>
+                                    <?php echo $currentVisitors; ?>/<?php echo $subscription['visitor_limit']; ?> Visitors
+                                </span>
+                            <?php endif; ?>
+                            
+                            <?php if ($visitorWidgetId): ?>
+                                <span class="widget-info ms-2">
+                                    Widget: <?php echo htmlspecialchars($visitorWidgetId); ?>
+                                </span>
+                            <?php elseif ($widgetId): ?>
+                                <span class="widget-info ms-2">
+                                    Your Widget: <?php echo htmlspecialchars($widgetId); ?>
+                                </span>
+                            <?php endif; ?>
+                        </div>
                     </div>
-                    
-                    <?php if ($visitorId): ?>
-                    <input type="hidden" name="visitor" value="<?php echo $visitorId; ?>">
-                    <?php endif; ?>
-                </form>
-                
-                <div class="filter-tabs">
-                    <a href="messages.php<?php echo !empty($searchTerm) ? '?search=' . urlencode($searchTerm) : ''; ?>" class="filter-tab <?php echo $filter === 'all' ? 'active' : ''; ?>">
-                        All
-                    </a>
-                    <a href="messages.php?filter=unread<?php echo !empty($searchTerm) ? '&search=' . urlencode($searchTerm) : ''; ?>" class="filter-tab <?php echo $filter === 'unread' ? 'active' : ''; ?>">
-                        Unread
-                    </a>
-                   <a href="messages.php?filter=read<?php echo !empty($searchTerm) ? '&search=' . urlencode($searchTerm) : ''; ?>" class="filter-tab <?php echo $filter === 'read' ? 'active' : ''; ?>">
-                        Read
-                    </a>
                 </div>
-            </div>
-            
-            <div class="conversation-list">
-                <?php if (empty($visitors)): ?>
-                    <div class="empty-state">
+            </nav>
+        </div>
+
+        <!-- Main Layout -->
+        <div class="messages-layout">
+            <!-- Sidebar -->
+            <div class="conversations-sidebar" id="conversationsSidebar">
+                <div class="sidebar-header">
+                    <h4 class="sidebar-title">
+                        <i class="fas fa-users me-2"></i>Conversations
+                        <?php if ($visitorId): ?>
+                            <a href="messages.php" class="btn btn-sm btn-outline-primary ms-2">
+                                <i class="fas fa-arrow-left me-1"></i>Back
+                            </a>
+                        <?php endif; ?>
+                    </h4>
+                </div>
+
+                <!-- Search -->
+                <div class="search-container">
+                    <div class="position-relative">
+                        <i class="fas fa-search search-icon"></i>
+                        <input type="text" class="form-control search-input" id="searchInput" 
+                               placeholder="Search conversations..." value="<?php echo htmlspecialchars($searchTerm); ?>">
                         <?php if (!empty($searchTerm)): ?>
-                            <p>No visitors found matching "<?php echo htmlspecialchars($searchTerm); ?>".</p>
-                            <a href="messages.php" class="btn-outline">Clear Search</a>
-                        <?php elseif ($filter === 'unread'): ?>
-                            <div class="empty-icon">📬</div>
-                            <p>You have no unread messages.</p>
-                        <?php elseif ($filter === 'read'): ?>
-                            <div class="empty-icon">📭</div>
-                            <p>You have no read conversations.</p>
-                        <?php else: ?>
-                            <div class="empty-icon">💬</div>
-                            <p>No messages yet. When visitors chat with you, they'll appear here.</p>
+                            <a href="messages.php" class="btn btn-sm btn-link position-absolute" 
+                               style="right: 10px; top: 50%; transform: translateY(-50%);">
+                                <i class="fas fa-times"></i>
+                            </a>
                         <?php endif; ?>
                     </div>
-                <?php else: ?>
-                    <?php foreach ($visitors as $visitor): ?>
-                        <?php 
-                        $hasUnread = isset($visitor['unread_count']) && $visitor['unread_count'] > 0;
-                        $isActive = $visitorId && $visitorId == $visitor['id'];
-                        ?>
-                        <a href="messages.php?visitor=<?php echo $visitor['id']; ?><?php echo !empty($searchTerm) ? '&search=' . urlencode($searchTerm) : ''; ?><?php echo $filter !== 'all' ? '&filter=' . htmlspecialchars($filter) : ''; ?>" 
-                           class="conversation-item <?php echo $isActive ? 'active' : ''; ?> <?php echo $hasUnread ? 'unread' : ''; ?>">
-                            <div class="conversation-avatar">
-                                <?php echo substr($visitor['name'] ?? 'A', 0, 1); ?>
-                            </div>
-                            <div class="conversation-content">
-                                <div class="conversation-header">
-                                    <span class="visitor-name"><?php echo htmlspecialchars($visitor['name'] ?? 'Anonymous'); ?></span>
-                                    <span class="last-message-time">
-                                        <?php 
-                                        if (isset($visitor['last_message_date'])) {
-                                            $lastMessageTime = strtotime($visitor['last_message_date']);
-                                            $now = time();
-                                            $diff = $now - $lastMessageTime;
-                                            
-                                            if ($diff < 60) {
-                                                echo 'Just now';
-                                            } elseif ($diff < 3600) {
-                                                echo floor($diff / 60) . 'm ago';
-                                            } elseif ($diff < 86400) {
-                                                echo floor($diff / 3600) . 'h ago';
-                                            } else {
-                                                echo date('M j', $lastMessageTime);
-                                            }
-                                        }
-                                        ?>
-                                    </span>
+                </div>
+
+                <!-- Filter Tabs -->
+                <div class="filter-tabs">
+                    <button class="filter-tab <?php echo $filter === 'all' ? 'active' : ''; ?>" data-filter="all">
+                        <i class="fas fa-inbox me-1"></i>All
+                    </button>
+                    <button class="filter-tab <?php echo $filter === 'unread' ? 'active' : ''; ?>" data-filter="unread">
+                        <i class="fas fa-circle me-1"></i>Unread
+                    </button>
+                    <button class="filter-tab <?php echo $filter === 'read' ? 'active' : ''; ?>" data-filter="read">
+                        <i class="fas fa-check-circle me-1"></i>Read
+                    </button>
+                </div>
+
+                <!-- Conversations List -->
+                <div class="conversations-list">
+                    <?php if (empty($visitors)): ?>
+                        <div class="empty-state">
+                            <?php if (!empty($searchTerm)): ?>
+                                <i class="fas fa-search"></i>
+                                <h5>No Results Found</h5>
+                                <p>No visitors found matching "<?php echo htmlspecialchars($searchTerm); ?>"</p>
+                                <button class="btn btn-outline-primary btn-sm" onclick="clearSearch()">
+                                    <i class="fas fa-times me-1"></i>Clear Search
+                                </button>
+                            <?php elseif ($filter === 'unread'): ?>
+                                <i class="fas fa-inbox"></i>
+                                <h5>All Caught Up!</h5>
+                                <p>You have no unread messages</p>
+                            <?php elseif ($filter === 'read'): ?>
+                                <i class="fas fa-check-circle"></i>
+                                <h5>No Read Conversations</h5>
+                                <p>You have no read conversations yet</p>
+                            <?php else: ?>
+                                <i class="fas fa-comments"></i>
+                                <h5>No Conversations Yet</h5>
+                                <p>When visitors start chatting, their conversations will appear here</p>
+                            <?php endif; ?>
+                        </div>
+                    <?php else: ?>
+                        <?php foreach ($visitors as $visitor): ?>
+                            <?php 
+                            $hasUnread = isset($visitor['unread_count']) && $visitor['unread_count'] > 0;
+                            $isActive = $visitorId && $visitorId == $visitor['id'];
+                            $lastActiveTime = strtotime($visitor['last_active']);
+                            $isOnline = (time() - $lastActiveTime) < 300; // 5 minutes
+                            ?>
+                            <a href="messages.php?visitor=<?php echo $visitor['id']; ?><?php echo !empty($searchTerm) ? '&search=' . urlencode($searchTerm) : ''; ?><?php echo $filter !== 'all' ? '&filter=' . htmlspecialchars($filter) : ''; ?>" 
+                               class="conversation-item <?php echo $isActive ? 'active' : ''; ?> <?php echo $hasUnread ? 'unread' : ''; ?>">
+                                <div class="conversation-avatar">
+                                    <?php echo substr($visitor['name'] ?? 'A', 0, 1); ?>
+                                    <?php if ($isOnline): ?>
+                                        <div class="online-indicator"></div>
+                                    <?php endif; ?>
                                 </div>
-                                <div class="conversation-meta">
-                                    <?php if (!empty($visitor['email'])): ?>
-                                        <span class="visitor-email"><?php echo htmlspecialchars($visitor['email']); ?></span>
-                                    <?php else: ?>
-                                        <span class="visitor-url">
+                                <div class="conversation-details">
+                                    <div class="conversation-header">
+                                        <h6 class="visitor-name"><?php echo htmlspecialchars($visitor['name'] ?? 'Anonymous'); ?></h6>
+                                        <span class="message-time">
                                             <?php 
-                                            $url = parse_url($visitor['url'] ?? '');
-                                            echo isset($url['host']) ? htmlspecialchars($url['host']) : 'Unknown';
+                                            if (isset($visitor['last_message_date'])) {
+                                                $lastMessageTime = strtotime($visitor['last_message_date']);
+                                                $diff = time() - $lastMessageTime;
+                                                
+                                                if ($diff < 60) {
+                                                    echo 'now';
+                                                } elseif ($diff < 3600) {
+                                                    echo floor($diff / 60) . 'm';
+                                                } elseif ($diff < 86400) {
+                                                    echo floor($diff / 3600) . 'h';
+                                                } else {
+                                                    echo date('M j', $lastMessageTime);
+                                                }
+                                            }
                                             ?>
                                         </span>
-                                    <?php endif; ?>
-                                    
-                                    <?php if ($hasUnread): ?>
-                                        <span class="unread-badge"><?php echo $visitor['unread_count']; ?></span>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                        </a>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </div>
-            
-            <?php if ($totalPages > 1): ?>
-                <div class="sidebar-pagination">
-                    <?php if ($page > 1): ?>
-                        <a href="messages.php?page=<?php echo $page - 1; ?><?php echo !empty($searchTerm) ? '&search=' . urlencode($searchTerm) : ''; ?><?php echo $filter !== 'all' ? '&filter=' . htmlspecialchars($filter) : ''; ?><?php echo $visitorId ? '&visitor=' . $visitorId : ''; ?>" class="pagination-button">
-                            <i class="fas fa-chevron-left"></i> Previous
-                        </a>
-                    <?php else: ?>
-                        <span></span>
-                    <?php endif; ?>
-                    
-                    <span class="pagination-info">Page <?php echo $page; ?> of <?php echo $totalPages; ?></span>
-                    
-                    <?php if ($page < $totalPages): ?>
-                        <a href="messages.php?page=<?php echo $page + 1; ?><?php echo !empty($searchTerm) ? '&search=' . urlencode($searchTerm) : ''; ?><?php echo $filter !== 'all' ? '&filter=' . htmlspecialchars($filter) : ''; ?><?php echo $visitorId ? '&visitor=' . $visitorId : ''; ?>" class="pagination-button">
-                            Next <i class="fas fa-chevron-right"></i>
-                        </a>
-                    <?php else: ?>
-                        <span></span>
-                    <?php endif; ?>
-                </div>
-            <?php endif; ?>
-        </div>
-        
-        <!-- Right content: Messages or empty state -->
-        <div class="messages-content">
-            <?php if ($visitorId && $visitorInfo): ?>
-                <div class="chat-header">
-                    <div class="visitor-info">
-                        <div class="visitor-avatar">
-                            <?php echo substr($visitorInfo['name'] ?? 'A', 0, 1); ?>
-                        </div>
-                        <div class="visitor-details">
-                            <h3><?php echo htmlspecialchars($visitorInfo['name'] ?? 'Anonymous Visitor'); ?></h3>
-                            <?php if (!empty($visitorInfo['email'])): ?>
-                                <div class="visitor-email"><?php echo htmlspecialchars($visitorInfo['email']); ?></div>
-                            <?php endif; ?>
-                            <?php if ($visitorWidgetId): ?>
-                                <div class="visitor-widget-id">Widget ID: <?php echo htmlspecialchars($visitorWidgetId); ?></div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                    <div class="visitor-meta">
-                        <?php if (!empty($visitorInfo['url'])): ?>
-                            <div class="meta-item">
-                                <i class="fas fa-globe"></i>
-                                <a href="<?php echo htmlspecialchars($visitorInfo['url']); ?>" target="_blank"><?php 
-                                    $url = parse_url($visitorInfo['url']);
-                                    echo isset($url['host']) ? htmlspecialchars($url['host']) : 'Unknown website';
-                                ?></a>
-                            </div>
-                        <?php endif; ?>
-                        <div class="meta-item">
-                            <?php 
-                            $lastActive = strtotime($visitorInfo['last_active']);
-                            $now = time();
-                            $diff = $now - $lastActive;
-                            $isActive = $diff < 300; // Consider active if less than 5 minutes
-                            ?>
-                            <span class="status-badge <?php echo $isActive ? 'online' : 'offline'; ?>"></span>
-                            <?php if ($isActive): ?>
-                                Online now
-                            <?php else: ?>
-                                Last active: <?php 
-                                    if ($diff < 60) {
-                                        echo 'Just now';
-                                    } elseif ($diff < 3600) {
-                                        echo floor($diff / 60) . ' minutes ago';
-                                    } elseif ($diff < 86400) {
-                                        echo floor($diff / 3600) . ' hours ago';
-                                    } else {
-                                        echo date('M j, g:i a', $lastActive);
-                                    }
-                                ?>
-                            <?php endif; ?>
-                        </div>
-                        <div class="visitor-actions">
-                            <a href="visitor-details.php?id=<?php echo $visitorId; ?>" class="btn btn-sm btn-outline">
-                                <i class="fas fa-user"></i> View Profile
-                            </a>
-                            <?php if (!empty($messages)): ?>
-                                <a href="#" class="btn btn-sm btn-outline toggle-mobile-sidebar">
-                                    <i class="fas fa-chevron-left"></i> All Chats
-                                </a>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="chat-messages" id="chat-messages">
-                    <?php if (empty($messages)): ?>
-                        <div class="empty-state">
-                            <div class="empty-icon">💬</div>
-                            <p>No messages yet with this visitor.</p>
-                            <p>Send a message to start the conversation.</p>
-                        </div>
-                    <?php else: ?>
-                        <div class="messages-date-divider">
-                            <span>Conversation started <?php echo date('F j, Y', strtotime($messages[0]['created_at'])); ?></span>
-                        </div>
-                        
-                        <?php 
-                        $currentDate = date('Y-m-d', strtotime($messages[0]['created_at']));
-                        foreach ($messages as $index => $message): 
-                            $messageDate = date('Y-m-d', strtotime($message['created_at']));
-                            
-                            // Show date divider if date changes
-                            if ($currentDate != $messageDate):
-                                $currentDate = $messageDate;
-                        ?>
-                            <div class="messages-date-divider">
-                                <span><?php echo date('F j, Y', strtotime($message['created_at'])); ?></span>
-                            </div>
-                        <?php endif; ?>
-                        
-                        <?php $isAgent = $message['sender_type'] === 'agent'; ?>
-                        <div class="message <?php echo $isAgent ? 'agent' : 'visitor'; ?>" data-id="<?php echo $message['id']; ?>">
-                            <?php if (!$isAgent): ?>
-                            <div class="message-avatar">
-                                <?php echo substr($visitorInfo['name'] ?? 'A', 0, 1); ?>
-                            </div>
-                            <?php endif; ?>
-                            
-                            <div class="message-bubble">
-                                <div class="message-content"><?php echo nl2br(htmlspecialchars($message['message'])); ?></div>
-                                <div class="message-time">
-                                    <?php echo date('g:i a', strtotime($message['created_at'])); ?>
-                                    <?php if ($isAgent): ?>
-                                        <?php if (isset($message['read']) && $message['read']): ?>
-                                            <span class="read-status" title="Read">
-                                                <i class="fas fa-check-double"></i>
-                                            </span>
+                                    </div>
+                                    <div class="last-message">
+                                        <?php 
+                                        $lastMsg = $visitor['last_message'] ?? '';
+                                        if (strpos($lastMsg, 'File: ') === 0) {
+                                            echo '<i class="fas fa-paperclip me-1"></i>' . htmlspecialchars(strlen($lastMsg) > 40 ? substr($lastMsg, 0, 40) . '...' : $lastMsg);
+                                        } else {
+                                            echo htmlspecialchars(strlen($lastMsg) > 50 ? substr($lastMsg, 0, 50) . '...' : $lastMsg);
+                                        }
+                                        ?>
+                                    </div>
+                                    <div class="conversation-meta">
+                                        <?php if (!empty($visitor['email'])): ?>
+                                            <span class="visitor-email"><?php echo htmlspecialchars($visitor['email']); ?></span>
                                         <?php else: ?>
-                                            <span class="read-status" title="Delivered">
-                                                <i class="fas fa-check"></i>
+                                            <span class="visitor-email">
+                                                <?php 
+                                                $url = parse_url($visitor['url'] ?? '');
+                                                echo isset($url['host']) ? htmlspecialchars($url['host']) : 'Unknown';
+                                                ?>
                                             </span>
                                         <?php endif; ?>
-                                    <?php endif; ?>
+                                        
+                                        <?php if ($hasUnread): ?>
+                                            <span class="unread-badge"><?php echo $visitor['unread_count']; ?></span>
+                                        <?php endif; ?>
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
+                            </a>
                         <?php endforeach; ?>
                     <?php endif; ?>
                 </div>
-                
-                <div class="chat-input-container">
-                    <?php if ($messageSent): ?>
-                        <div class="message-status success">
-                            <i class="fas fa-check-circle"></i> Message sent successfully.
-                        </div>
-                    <?php elseif ($messageError): ?>
-                        <div class="message-status error">
-                            <i class="fas fa-exclamation-circle"></i> <?php echo htmlspecialchars($messageError); ?>
-                        </div>
-                    <?php endif; ?>
-                    
-                    <form method="post" class="chat-form" id="chat-form">
-                        <textarea name="message" class="chat-input" id="message-input" placeholder="Type your message here..." required></textarea>
-                        <div class="chat-actions">
-                            <div>
-                                <button type="button" class="btn btn-icon emoji-btn" title="Add Emoji">
-                                    <i class="fas fa-smile"></i>
+
+                <!-- Pagination -->
+                <?php if ($totalPages > 1): ?>
+                    <div class="d-flex justify-content-between align-items-center p-3 border-top">
+                        <?php if ($page > 1): ?>
+                            <a href="messages.php?page=<?php echo $page - 1; ?><?php echo !empty($searchTerm) ? '&search=' . urlencode($searchTerm) : ''; ?><?php echo $filter !== 'all' ? '&filter=' . htmlspecialchars($filter) : ''; ?>" 
+                               class="btn btn-outline-primary btn-sm">
+                                <i class="fas fa-chevron-left me-1"></i>Previous
+                            </a>
+                        <?php else: ?>
+                            <span></span>
+                        <?php endif; ?>
+                        
+                        <small class="text-muted">Page <?php echo $page; ?> of <?php echo $totalPages; ?></small>
+                        
+                        <?php if ($page < $totalPages): ?>
+                            <a href="messages.php?page=<?php echo $page + 1; ?><?php echo !empty($searchTerm) ? '&search=' . urlencode($searchTerm) : ''; ?><?php echo $filter !== 'all' ? '&filter=' . htmlspecialchars($filter) : ''; ?>" 
+                               class="btn btn-outline-primary btn-sm">
+                                Next<i class="fas fa-chevron-right ms-1"></i>
+                            </a>
+                        <?php else: ?>
+                            <span></span>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+
+            <!-- Chat Area -->
+            <div class="chat-container">
+                <?php if ($visitorId && $visitorInfo): ?>
+                    <!-- Chat Header -->
+                    <div class="chat-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="chat-user-info">
+                                <div class="chat-avatar">
+                                    <?php echo substr($visitorInfo['name'] ?? 'A', 0, 1); ?>
+                                </div>
+                                <div class="chat-user-details">
+                                    <h5><?php echo htmlspecialchars($visitorInfo['name'] ?? 'Anonymous Visitor'); ?></h5>
+                                    <p class="chat-user-status <?php 
+                                        $lastActive = strtotime($visitorInfo['last_active']);
+                                        $isOnline = (time() - $lastActive) < 300;
+                                        echo $isOnline ? 'online-status' : 'offline-status';
+                                    ?>">
+                                        <?php if ($isOnline): ?>
+                                            <i class="fas fa-circle me-1"></i>Online now
+                                        <?php else: ?>
+                                            <i class="far fa-clock me-1"></i>Last seen <?php 
+                                                $diff = time() - $lastActive;
+                                                if ($diff < 3600) {
+                                                    echo floor($diff / 60) . ' minutes ago';
+                                                } elseif ($diff < 86400) {
+                                                    echo floor($diff / 3600) . ' hours ago';
+                                                } else {
+                                                    echo date('M j, g:i a', $lastActive);
+                                                }
+                                            ?>
+                                        <?php endif; ?>
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center">
+                                <?php if (!empty($visitorInfo['url'])): ?>
+                                    <a href="<?php echo htmlspecialchars($visitorInfo['url']); ?>" target="_blank" 
+                                       class="btn btn-outline-primary btn-sm me-2">
+                                        <i class="fas fa-external-link-alt me-1"></i>Visit Site
+                                    </a>
+                                <?php endif; ?>
+                                <button class="btn btn-outline-secondary btn-sm me-2" data-bs-toggle="modal" data-bs-target="#visitorInfoModal">
+                                    <i class="fas fa-info-circle me-1"></i>Info
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm d-md-none" onclick="showSidebar()">
+                                    <i class="fas fa-list me-1"></i>Chats
                                 </button>
                             </div>
-                            <button type="submit" class="btn btn-primary send-btn">
-                                <i class="fas fa-paper-plane"></i> Send
-                            </button>
                         </div>
-                    </form>
+                    </div>
+
+                    <!-- Messages Area -->
+                    <div class="chat-messages" id="chatMessages">
+                        <?php if (empty($messages)): ?>
+                            <div class="empty-state">
+                                <i class="fas fa-comment-dots"></i>
+                                <h4>Start the Conversation</h4>
+                                <p>No messages yet. Send a message to begin chatting with this visitor.</p>
+                            </div>
+                        <?php else: ?>
+                            <?php 
+                            $currentDate = '';
+                            foreach ($messages as $index => $message): 
+                                $messageDate = date('Y-m-d', strtotime($message['created_at']));
+                                
+                                // Show date divider if date changes
+                                if ($currentDate !== $messageDate):
+                                    $currentDate = $messageDate;
+                            ?>
+                                <div class="date-divider">
+                                    <span><?php echo date('F j, Y', strtotime($message['created_at'])); ?></span>
+                                </div>
+                            <?php endif; ?>
+                            
+                            <?php $isAgent = $message['sender_type'] === 'agent'; ?>
+                            <div class="message <?php echo $isAgent ? 'sent' : 'received'; ?>" data-id="<?php echo $message['id']; ?>">
+                                <div class="message-content">
+                                    <?php if (!empty($message['file_path'])): ?>
+                                        <?php if (isImage($message['file_name'])): ?>
+                                            <div class="image-message" onclick="openImageModal('<?php echo htmlspecialchars($message['file_path']); ?>', '<?php echo htmlspecialchars($message['file_name']); ?>')">
+                                                <img src="<?php echo htmlspecialchars($message['file_path']); ?>" alt="<?php echo htmlspecialchars($message['file_name']); ?>">
+                                            </div>
+                                        <?php else: ?>
+                                            <div class="file-message" onclick="downloadFile('<?php echo htmlspecialchars($message['file_path']); ?>', '<?php echo htmlspecialchars($message['file_name']); ?>')">
+                                                <div class="file-icon">
+                                                    <i class="<?php echo getFileIcon($message['file_name']); ?>"></i>
+                                                </div>
+                                                <div class="file-details">
+                                                    <h6><?php echo htmlspecialchars($message['file_name']); ?></h6>
+                                                    <div class="file-size"><?php echo htmlspecialchars($message['file_size']); ?></div>
+                                                </div>
+                                                <button class="download-btn">
+                                                    <i class="fas fa-download"></i>
+                                                </button>
+                                            </div>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
+                                    
+                                    <?php if (!empty($message['message']) && strpos($message['message'], 'File: ') !== 0): ?>
+                                        <p class="message-text"><?php echo nl2br(htmlspecialchars($message['message'])); ?></p>
+                                    <?php endif; ?>
+                                    
+                                    <div class="message-time">
+                                        <?php echo date('g:i A', strtotime($message['created_at'])); ?>
+                                        <?php if ($isAgent): ?>
+                                            <span class="message-status">
+                                                <?php if (isset($message['read']) && $message['read']): ?>
+                                                    <i class="fas fa-check-double text-info" title="Read"></i>
+                                                <?php else: ?>
+                                                    <i class="fas fa-check" title="Delivered"></i>
+                                                <?php endif; ?>
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- Chat Input -->
+                    <div class="chat-input-container">
+                        <!-- Subscription Notices -->
+                        <?php if ($subscription): ?>
+                            <?php 
+                            $messagePercentage = ($currentMessages / $subscription['message_limit']) * 100;
+                            $visitorPercentage = ($currentVisitors / $subscription['visitor_limit']) * 100;
+                            ?>
+                            
+                            <?php if ($messagePercentage > 90 || $visitorPercentage > 90): ?>
+                                <div class="subscription-notice danger">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    <strong>Limit Warning:</strong> You're approaching your subscription limits. 
+                                    <?php if ($messagePercentage > 90): ?>
+                                        Messages: <?php echo $currentMessages; ?>/<?php echo $subscription['message_limit']; ?>
+                                    <?php endif; ?>
+                                    <?php if ($visitorPercentage > 90): ?>
+                                        <?php echo $messagePercentage > 90 ? ', ' : ''; ?>Visitors: <?php echo $currentVisitors; ?>/<?php echo $subscription['visitor_limit']; ?>
+                                    <?php endif; ?>
+                                </div>
+                            <?php elseif ($messagePercentage > 75 || $visitorPercentage > 75): ?>
+                                <div class="subscription-notice">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    <strong>Usage Notice:</strong> You're using a significant portion of your subscription limits.
+                                </div>
+                            <?php endif; ?>
+                        <?php endif; ?>
+
+                        <?php if ($messageSent || $fileUploaded): ?>
+                            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                                <i class="fas fa-check-circle me-2"></i>
+                                <?php if ($messageSent && $fileUploaded): ?>
+                                    Message and file(s) sent successfully!
+                                <?php elseif ($fileUploaded): ?>
+                                    File(s) sent successfully!
+                                <?php else: ?>
+                                    Message sent successfully!
+                                <?php endif; ?>
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        <?php elseif ($messageError): ?>
+                            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                                <i class="fas fa-exclamation-circle me-2"></i><?php echo htmlspecialchars($messageError); ?>
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        <?php endif; ?>
+
+                        <form method="post" id="chatForm" enctype="multipart/form-data">
+                            <div class="chat-input-wrapper">
+                                <textarea name="message" class="message-input" id="messageInput" 
+                                          placeholder="Type your message..." rows="1"></textarea>
+                                <div class="input-actions">
+                                    <button type="button" class="file-upload-btn" 
+                                            onclick="document.getElementById('fileInput').click()" 
+                                            <?php echo !$canUpload ? 'disabled title="File uploads not available on your plan"' : ''; ?>>
+                                        <i class="fas fa-paperclip"></i>
+                                    </button>
+                                    <button type="button" class="emoji-btn" onclick="addEmoji()">
+                                        <i class="fas fa-smile"></i>
+                                    </button>
+                                    <button type="submit" class="send-btn" id="sendBtn">
+                                        <i class="fas fa-paper-plane"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Hidden file input -->
+                            <input type="file" id="fileInput" name="files[]" multiple style="display: none;" 
+                                   accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar"
+                                   <?php echo !$canUpload ? 'disabled' : ''; ?>>
+                            
+                            <!-- File upload area -->
+                            <div class="file-upload-area" id="fileUploadArea">
+                                <i class="fas fa-cloud-upload-alt fa-2x mb-2"></i>
+                                <p>Drag and drop files here, or click to browse</p>
+                                <small class="text-muted">
+                                    <?php if ($canUpload): ?>
+                                        Supports: Images, Documents, Archives (Max 10MB per file)
+                                    <?php else: ?>
+                                        File uploads not available on your current plan
+                                    <?php endif; ?>
+                                </small>
+                            </div>
+                            
+                            <!-- File preview -->
+                            <div class="file-preview" id="filePreview"></div>
+                        </form>
+                        
+                        <?php if ($visitorWidgetId): ?>
+                            <div class="text-center mt-2">
+                                <small class="text-muted">
+                                    <i class="fas fa-widget me-1"></i>Widget: <?php echo htmlspecialchars($visitorWidgetId); ?>
+                                </small>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php else: ?>
+                    <!-- Empty State -->
+                    <div class="empty-state">
+                        <i class="fas fa-comment-alt"></i>
+                        <h4>Select a Conversation</h4>
+                        <p>Choose a conversation from the sidebar to start chatting with your visitors.</p>
+                        
+                        <?php if ($subscription): ?>
+                            <div class="mt-4">
+                                <small class="text-muted">
+                                    <strong>Current Plan:</strong> <?php echo htmlspecialchars($subscription['name']); ?><br>
+                                    <strong>Usage:</strong> <?php echo $currentMessages; ?>/<?php echo $subscription['message_limit']; ?> messages, 
+                                    <?php echo $currentVisitors; ?>/<?php echo $subscription['visitor_limit']; ?> visitors<br>
+                                    <strong>File Uploads:</strong> <?php echo $canUpload ? 'Enabled' : 'Not Available'; ?>
+                                </small>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+    <!-- Visitor Info Modal -->
+    <?php if ($visitorInfo): ?>
+    <div class="modal fade" id="visitorInfoModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-user me-2"></i>Visitor Information
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="text-center mb-4">
+                        <div class="chat-avatar mx-auto mb-3" style="width: 80px; height: 80px; font-size: 2rem;">
+                            <?php echo substr($visitorInfo['name'] ?? 'A', 0, 1); ?>
+                        </div>
+                        <h5><?php echo htmlspecialchars($visitorInfo['name'] ?? 'Anonymous Visitor'); ?></h5>
+                    </div>
                     
+                    <div class="row">
+                        <div class="col-sm-4"><strong>Email:</strong></div>
+                        <div class="col-sm-8"><?php echo htmlspecialchars($visitorInfo['email'] ?? 'Not provided'); ?></div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-sm-4"><strong>Website:</strong></div>
+                        <div class="col-sm-8">
+                            <?php if (!empty($visitorInfo['url'])): ?>
+                                <a href="<?php echo htmlspecialchars($visitorInfo['url']); ?>" target="_blank">
+                                    <?php echo htmlspecialchars($visitorInfo['url']); ?>
+                                </a>
+                            <?php else: ?>
+                                Not available
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-sm-4"><strong>IP Address:</strong></div>
+                        <div class="col-sm-8"><?php echo htmlspecialchars($visitorInfo['ip_address'] ?? 'Unknown'); ?></div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-sm-4"><strong>First Visit:</strong></div>
+                        <div class="col-sm-8"><?php echo date('M j, Y g:i A', strtotime($visitorInfo['created_at'])); ?></div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-sm-4"><strong>Last Active:</strong></div>
+                        <div class="col-sm-8"><?php echo date('M j, Y g:i A', strtotime($visitorInfo['last_active'])); ?></div>
+                    </div>
                     <?php if ($visitorWidgetId): ?>
-                    <div class="widget-info">
-                        <small>Messages will be sent to widget ID: <?php echo htmlspecialchars($visitorWidgetId); ?></small>
+                    <hr>
+                    <div class="row">
+                        <div class="col-sm-4"><strong>Widget ID:</strong></div>
+                        <div class="col-sm-8">
+                            <code><?php echo htmlspecialchars($visitorWidgetId); ?></code>
+                        </div>
                     </div>
                     <?php endif; ?>
                 </div>
-            <?php else: ?>
-                <div class="empty-chat">
-                    <div class="empty-chat-icon">💬</div>
-                    <h3>Select a conversation</h3>
-                    <p>Choose a conversation from the list to view messages</p>
-                </div>
-            <?php endif; ?>
+            </div>
         </div>
     </div>
-</main>
+    <?php endif; ?>
 
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Auto-scroll to bottom of chat messages
-    const chatMessages = document.getElementById('chat-messages');
-    if (chatMessages) {
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
+    <!-- Image Modal -->
+    <div class="modal fade" id="imageModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="imageModalTitle">Image Preview</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <img id="imageModalImg" src="" alt="" class="img-fluid">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" id="downloadImageBtn">
+                        <i class="fas fa-download me-1"></i>Download
+                    </button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
-    // Auto-resize textarea
-    const messageInput = document.getElementById('message-input');
-    if (messageInput) {
-        messageInput.addEventListener('input', function() {
-            this.style.height = '24px';
-            this.style.height = (this.scrollHeight) + 'px';
-        });
-        
-        // Focus the input
-        messageInput.focus();
-    }
-    
-    // Hide message status after delay
-    const messageStatus = document.querySelector('.message-status');
-    if (messageStatus) {
-        setTimeout(function() {
-            messageStatus.style.opacity = '0';
-            setTimeout(function() {
-                messageStatus.style.display = 'none';
-            }, 300);
-        }, 3000);
-    }
-    
-    // Toggle sidebar in mobile view
-    const toggleSidebarBtn = document.querySelector('.toggle-mobile-sidebar');
-    if (toggleSidebarBtn) {
-        toggleSidebarBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            const sidebar = document.querySelector('.conversations-sidebar');
-            const content = document.querySelector('.messages-content');
-            
-            sidebar.style.display = 'flex';
-            content.style.display = 'none';
-        });
-    }
-    
-    // Real-time message checking (simplified)
-    const visitorId = <?php echo $visitorId ? $visitorId : 'null'; ?>;
-    
-    if (visitorId) {
-        // Configure polling interval
-        const checkInterval = 5000; // 5 seconds
-        
-        // Start polling for new messages
-        setInterval(function() {
-            // In a real app, you would add AJAX here to check for new messages
-            // For this demo, we'll just log that we're checking
-            console.log("Checking for new messages...");
-        }, checkInterval);
-        
-        // Handle form submission with better UX
-        const chatForm = document.getElementById('chat-form');
-        if (chatForm) {
-            chatForm.addEventListener('submit', function(e) {
-                // We won't prevent default here to allow normal form submission
-                // But we'll enhance the UX
-                
-                const textarea = this.querySelector('textarea');
-                const message = textarea.value.trim();
-                
-                if (!message) {
-                    e.preventDefault();
-                    return;
-                }
-                
-                // Show sending indicator
-                const sendBtn = this.querySelector('.send-btn');
-                sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
-                sendBtn.disabled = true;
-                
-                // Let the form submit normally
+    <script>
+        // Auto-resize textarea
+        const messageInput = document.getElementById('messageInput');
+        if (messageInput) {
+            messageInput.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = Math.min(this.scrollHeight, 120) + 'px';
             });
         }
-    }
-    
-    // Emoji picker functionality (simplified)
-    const emojiBtn = document.querySelector('.emoji-btn');
-    if (emojiBtn && messageInput) {
-        emojiBtn.addEventListener('click', function() {
-            // In a real app, you would show an emoji picker
-            // For this demo, we'll just insert a simple emoji
-            messageInput.value += ' 😊';
-            messageInput.focus();
-            
-            // Trigger the input event to resize the textarea
-            const event = new Event('input');
-            messageInput.dispatchEvent(event);
+
+        // Auto-scroll to bottom
+        const chatMessages = document.getElementById('chatMessages');
+        if (chatMessages) {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Mobile sidebar toggle
+        function showSidebar() {
+            document.getElementById('conversationsSidebar').classList.add('show');
+        }
+
+        function hideSidebar() {
+            document.getElementById('conversationsSidebar').classList.remove('show');
+        }
+
+        document.getElementById('toggleSidebar')?.addEventListener('click', showSidebar);
+
+        // Filter functionality
+        document.querySelectorAll('.filter-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                const filter = this.dataset.filter;
+                const searchTerm = document.getElementById('searchInput')?.value || '';
+                const url = new URL(window.location);
+                
+                if (filter === 'all') {
+                    url.searchParams.delete('filter');
+                } else {
+                    url.searchParams.set('filter', filter);
+                }
+                
+                if (searchTerm) {
+                    url.searchParams.set('search', searchTerm);
+                } else {
+                    url.searchParams.delete('search');
+                }
+                
+                window.location.href = url.toString();
+            });
         });
-    }
-});
-</script>
+
+        // Search functionality
+        let searchTimeout;
+        document.getElementById('searchInput')?.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                const searchTerm = this.value.trim();
+                const url = new URL(window.location);
+                
+                if (searchTerm) {
+                    url.searchParams.set('search', searchTerm);
+                } else {
+                    url.searchParams.delete('search');
+                }
+                
+                window.location.href = url.toString();
+            }, 500);
+        });
+
+        function clearSearch() {
+            const url = new URL(window.location);
+            url.searchParams.delete('search');
+            window.location.href = url.toString();
+        }
+
+        // File upload functionality
+        const fileInput = document.getElementById('fileInput');
+        const fileUploadArea = document.getElementById('fileUploadArea');
+        const filePreview = document.getElementById('filePreview');
+        let selectedFiles = [];
+
+        fileInput?.addEventListener('change', handleFileSelect);
+
+        function handleFileSelect(event) {
+            if (!<?php echo $canUpload ? 'true' : 'false'; ?>) {
+                alert('File uploads are not available on your current subscription plan.');
+                return;
+            }
+            
+            const files = Array.from(event.target.files);
+            selectedFiles = [...selectedFiles, ...files];
+            updateFilePreview();
+        }
+
+        function updateFilePreview() {
+            if (selectedFiles.length === 0) {
+                filePreview.style.display = 'none';
+                return;
+            }
+
+            filePreview.style.display = 'flex';
+            filePreview.innerHTML = '';
+
+            selectedFiles.forEach((file, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-preview-item';
+                fileItem.innerHTML = `
+                    <i class="fas fa-file me-2"></i>
+                    <span>${file.name}</span>
+                    <i class="fas fa-times remove-file" onclick="removeFile(${index})"></i>
+                `;
+                filePreview.appendChild(fileItem);
+            });
+        }
+
+        function removeFile(index) {
+            selectedFiles.splice(index, 1);
+            updateFilePreview();
+        }
+
+        // Drag and drop (only if uploads are allowed)
+        if (<?php echo $canUpload ? 'true' : 'false'; ?>) {
+            document.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                if (fileUploadArea) {
+                    fileUploadArea.style.display = 'block';
+                    fileUploadArea.classList.add('dragover');
+                }
+            });
+
+            document.addEventListener('dragleave', function(e) {
+                if (!e.relatedTarget && fileUploadArea) {
+                    fileUploadArea.classList.remove('dragover');
+                }
+            });
+
+            document.addEventListener('drop', function(e) {
+                e.preventDefault();
+                if (fileUploadArea) {
+                    fileUploadArea.classList.remove('dragover');
+                    const files = Array.from(e.dataTransfer.files);
+                    selectedFiles = [...selectedFiles, ...files];
+                    updateFilePreview();
+                }
+            });
+        }
+
+        // Emoji functionality
+        function addEmoji() {
+            const emojis = ['😊', '😂', '❤️', '👍', '😍', '😢', '😮', '😡', '🎉', '👏'];
+            const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+            messageInput.value += randomEmoji;
+            messageInput.focus();
+        }
+
+        // Image modal
+        function openImageModal(imageUrl, imageName) {
+            document.getElementById('imageModalImg').src = imageUrl;
+            document.getElementById('imageModalTitle').textContent = imageName;
+            document.getElementById('downloadImageBtn').onclick = () => downloadFile(imageUrl, imageName);
+            new bootstrap.Modal(document.getElementById('imageModal')).show();
+        }
+
+        // File download
+        function downloadFile(url, filename) {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        // Form submission enhancement
+        document.getElementById('chatForm')?.addEventListener('submit', function(e) {
+            const sendBtn = document.getElementById('sendBtn');
+            const messageText = messageInput.value.trim();
+            const hasFiles = selectedFiles.length > 0;
+            
+            if (!messageText && !hasFiles) {
+                e.preventDefault();
+                return;
+            }
+            
+            sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            sendBtn.disabled = true;
+        });
+
+        // Real-time message checking
+        <?php if ($visitorId): ?>
+        let lastMessageId = <?php echo !empty($messages) ? max(array_column($messages, 'id')) : 0; ?>;
+        
+        function checkForNewMessages() {
+            fetch(`ajax/check-messages.php?visitor_id=<?php echo $visitorId; ?>&last_id=${lastMessageId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.messages.length > 0) {
+                        data.messages.forEach(message => {
+                            if (message.sender_type === 'visitor') {
+                                addMessageToChat(message);
+                                lastMessageId = Math.max(lastMessageId, message.id);
+                            }
+                        });
+                    }
+                })
+                .catch(error => console.error('Error checking messages:', error));
+        }
+        
+        function addMessageToChat(message) {
+            const messagesContainer = document.getElementById('chatMessages');
+            const messageEl = document.createElement('div');
+            messageEl.className = 'message received';
+            
+            let messageContent = '';
+            if (message.file_path) {
+                if (['jpg', 'jpeg', 'png', 'gif'].includes(message.file_name.split('.').pop().toLowerCase())) {
+                    messageContent = `<div class="image-message" onclick="openImageModal('${message.file_path}', '${message.file_name}')">
+                        <img src="${message.file_path}" alt="${message.file_name}">
+                    </div>`;
+                } else {
+                    messageContent = `<div class="file-message" onclick="downloadFile('${message.file_path}', '${message.file_name}')">
+                        <div class="file-icon"><i class="fas fa-file"></i></div>
+                        <div class="file-details">
+                            <h6>${message.file_name}</h6>
+                            <div class="file-size">${message.file_size}</div>
+                        </div>
+                        <button class="download-btn"><i class="fas fa-download"></i></button>
+                    </div>`;
+                }
+            }
+            
+            if (message.message && !message.message.startsWith('File: ')) {
+                messageContent += `<p class="message-text">${message.message.replace(/\n/g, '<br>')}</p>`;
+            }
+            
+            messageEl.innerHTML = `
+                <div class="message-content">
+                    ${messageContent}
+                    <div class="message-time">${new Date(message.created_at).toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'})}</div>
+                </div>
+            `;
+            messagesContainer.appendChild(messageEl);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        // Check for new messages every 3 seconds
+        setInterval(checkForNewMessages, 3000);
+        <?php endif; ?>
+
+        // Auto-dismiss alerts
+        setTimeout(() => {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(alert => {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            });
+        }, 5000);
+    </script>
+</body>
+</html>
 
 <?php include '../includes/footer.php'; ?>

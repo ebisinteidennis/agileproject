@@ -172,4 +172,12 @@ include 'includes/header.php';
     </section>
 </main>
 
+
+<script>
+var WIDGET_ID = "450a6c5bead35a8c3648a923a33da5a5";
+</script>
+<script src="https://agileproject.site/widget/embed.js" async></script>
+
+ <script src="diagnostic-embed.js"></script>
+
 <?php include 'includes/footer.php'; ?>

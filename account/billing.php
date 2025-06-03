@@ -134,7 +134,7 @@ include '../includes/header.php';
                         <div class="plan-header">
                             <h3><?php echo htmlspecialchars($plan['name'] ?? 'Unnamed Plan'); ?></h3>
                             <div class="plan-price">
-                                <span class="currency"><?php echo htmlspecialchars($settings['currency_symbol'] ?? '$'); ?></span>
+                                <span class="currency"><?php echo htmlspecialchars($settings['currency_symbol'] ?? 'N'); ?></span>
                                 <span class="amount"><?php echo number_format(($plan['price'] ?? 0), 2); ?></span>
                             </div>
                             <div class="plan-duration">For <?php echo htmlspecialchars($plan['duration'] ?? 30); ?> days</div>
