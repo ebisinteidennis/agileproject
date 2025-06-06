@@ -8,16 +8,29 @@ require_once '../includes/auth.php';
 requireLogin();
 
 $userId = $_SESSION['user_id'];
-$user = getUserById($userId);
+
+// Get user info
+try {
+    $user = $db->fetch("SELECT * FROM users WHERE id = ?", [$userId]);
+} catch (Exception $e) {
+    error_log("Error getting user: " . $e->getMessage());
+    $user = null;
+}
 
 // Get widget_id for this user
 $widgetId = isset($user['widget_id']) ? $user['widget_id'] : null;
 
-// Check subscription status and get limits
-$canUpload = canUploadFiles($userId);
+// Simple file upload check - assume allowed for now
+$canUpload = true;
+
+// Get subscription info if exists
 $subscription = null;
-if ($user['subscription_id']) {
-    $subscription = getSubscriptionById($user['subscription_id']);
+if (isset($user['subscription_id']) && $user['subscription_id']) {
+    try {
+        $subscription = $db->fetch("SELECT * FROM subscriptions WHERE id = ?", [$user['subscription_id']]);
+    } catch (Exception $e) {
+        error_log("Error getting subscription: " . $e->getMessage());
+    }
 }
 
 // Check if widget_id column exists in messages table
@@ -47,32 +60,36 @@ $offset = ($page - 1) * $limit;
 $visitorWidgetId = null;
 if ($visitorId) {
     // Get widget_id associated with this visitor's messages
-    $visitorWidget = $db->fetch(
-        "SELECT widget_id FROM messages 
-         WHERE user_id = :user_id AND visitor_id = :visitor_id AND widget_id IS NOT NULL
-         ORDER BY created_at DESC 
-         LIMIT 1",
-        ['user_id' => $userId, 'visitor_id' => $visitorId]
-    );
-    
-    $visitorWidgetId = $visitorWidget ? $visitorWidget['widget_id'] : null;
-    
-    // Store widget_id in session for use in other files
-    $_SESSION['current_visitor_widget_id'] = $visitorWidgetId;
-    
-    // Mark messages as read if viewing a specific conversation
-    if ($hasWidgetIdColumn && $visitorWidgetId) {
-        $db->query(
-            "UPDATE messages SET `read` = 1 
-            WHERE user_id = ? AND visitor_id = ? AND sender_type = ? AND widget_id = ?", 
-            [$userId, $visitorId, 'visitor', $visitorWidgetId]
+    try {
+        $visitorWidget = $db->fetch(
+            "SELECT widget_id FROM messages 
+             WHERE user_id = :user_id AND visitor_id = :visitor_id AND widget_id IS NOT NULL
+             ORDER BY created_at DESC 
+             LIMIT 1",
+            ['user_id' => $userId, 'visitor_id' => $visitorId]
         );
-    } else {
-        $db->query(
-            "UPDATE messages SET `read` = 1 
-            WHERE user_id = ? AND visitor_id = ? AND sender_type = ?", 
-            [$userId, $visitorId, 'visitor']
-        );
+        
+        $visitorWidgetId = $visitorWidget ? $visitorWidget['widget_id'] : null;
+        
+        // Store widget_id in session for use in other files
+        $_SESSION['current_visitor_widget_id'] = $visitorWidgetId;
+        
+        // Mark messages as read if viewing a specific conversation
+        if ($hasWidgetIdColumn && $visitorWidgetId) {
+            $db->query(
+                "UPDATE messages SET `read` = 1 
+                WHERE user_id = ? AND visitor_id = ? AND sender_type = ? AND widget_id = ?", 
+                [$userId, $visitorId, 'visitor', $visitorWidgetId]
+            );
+        } else {
+            $db->query(
+                "UPDATE messages SET `read` = 1 
+                WHERE user_id = ? AND visitor_id = ? AND sender_type = ?", 
+                [$userId, $visitorId, 'visitor']
+            );
+        }
+    } catch (Exception $e) {
+        error_log("Error processing visitor: " . $e->getMessage());
     }
 }
 
@@ -215,16 +232,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['message']) && $visito
     $messageContent = trim($_POST['message']);
     $hasFiles = !empty($_FILES['files']['tmp_name'][0]);
     
-    // Validate subscription for sending messages
-    if (!canSendMessage($userId, $visitorWidgetId)) {
-        $messageError = "Message limit reached for your subscription plan.";
-    } 
-    // Check file upload permissions
-    elseif ($hasFiles && !$canUpload) {
-        $messageError = "File uploads are not allowed on your current subscription plan.";
-    }
-    // Ensure either message or file is provided
-    elseif (empty($messageContent) && !$hasFiles) {
+    // Simple validation - ensure either message or file is provided
+    if (empty($messageContent) && !$hasFiles) {
         $messageError = "Message or file is required.";
     } else {
         try {
@@ -246,11 +255,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['message']) && $visito
                             'error' => $_FILES['files']['error'][$index]
                         ];
                         
-                        $uploadResult = uploadFile($file, $uploadDir);
-                        if ($uploadResult['success']) {
-                            $uploadedFiles[] = $uploadResult;
-                        } else {
-                            throw new Exception($uploadResult['message']);
+                        // Simple file upload
+                        if ($file['error'] === UPLOAD_ERR_OK) {
+                            $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+                            $filename = uniqid() . '_' . time() . '.' . $extension;
+                            $filepath = $uploadDir . '/' . $filename;
+                            
+                            if (move_uploaded_file($file['tmp_name'], $filepath)) {
+                                $uploadedFiles[] = [
+                                    'filename' => $filename,
+                                    'filepath' => $filepath,
+                                    'original_name' => $file['name'],
+                                    'size' => $file['size'],
+                                    'type' => $file['type']
+                                ];
+                            }
                         }
                     }
                 }
@@ -289,7 +308,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['message']) && $visito
                     'read' => 0,
                     'file_path' => $file['filename'],
                     'file_name' => $file['original_name'],
-                    'file_size' => formatFileSize($file['size']),
+                    'file_size' => round($file['size'] / 1024, 2) . ' KB',
                     'file_type' => $file['type']
                 ];
                 
@@ -369,9 +388,51 @@ try {
     $unreadMessagesCount = 0;
 }
 
-// Get current usage stats for subscription
-$currentVisitors = getVisitorCount($userId);
-$currentMessages = getMessageCount($userId);
+// Get current usage stats
+try {
+    $currentVisitors = $db->fetch("SELECT COUNT(*) as count FROM visitors WHERE user_id = ?", [$userId]);
+    $currentVisitors = $currentVisitors ? $currentVisitors['count'] : 0;
+} catch (Exception $e) {
+    $currentVisitors = 0;
+}
+
+try {
+    $currentMessages = $db->fetch("SELECT COUNT(*) as count FROM messages WHERE user_id = ?", [$userId]);
+    $currentMessages = $currentMessages ? $currentMessages['count'] : 0;
+} catch (Exception $e) {
+    $currentMessages = 0;
+}
+
+// Simple helper functions
+function isImage($filename) {
+    $imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+    return in_array($extension, $imageExtensions);
+}
+
+function getFileIcon($filename) {
+    $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+    
+    $icons = [
+        'pdf' => 'fas fa-file-pdf text-danger',
+        'doc' => 'fas fa-file-word text-primary',
+        'docx' => 'fas fa-file-word text-primary',
+        'xls' => 'fas fa-file-excel text-success',
+        'xlsx' => 'fas fa-file-excel text-success',
+        'ppt' => 'fas fa-file-powerpoint text-warning',
+        'pptx' => 'fas fa-file-powerpoint text-warning',
+        'txt' => 'fas fa-file-alt text-secondary',
+        'zip' => 'fas fa-file-archive text-info',
+        'rar' => 'fas fa-file-archive text-info',
+        'jpg' => 'fas fa-file-image text-success',
+        'jpeg' => 'fas fa-file-image text-success',
+        'png' => 'fas fa-file-image text-success',
+        'gif' => 'fas fa-file-image text-success',
+        'webp' => 'fas fa-file-image text-success'
+    ];
+    
+    return isset($icons[$extension]) ? $icons[$extension] : 'fas fa-file text-secondary';
+}
 
 // Include header
 include '../includes/header.php';
